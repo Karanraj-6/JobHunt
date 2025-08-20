@@ -1,0 +1,168 @@
+# Job Filtering Configuration
+job_filters:
+  # Allowed locations (case-insensitive partial matches)
+  allowed_locations:
+    - "India"
+    - "Hyderabad"
+    - "Bangalore"
+    - "Mumbai"
+    - "Delhi"
+    - "Remote"
+    - "Work from home"
+  
+  # Required skills (at least one must be present)
+  required_skills:
+    - "python"
+    - "machine learning"
+    - "ml"
+    - "data science"
+    - "nlp"
+    - "natural language processing"
+    - "deep learning"
+    - "ai"
+    - "artificial intelligence"
+    - "data engineering"
+    - "software engineering"
+    - "web development"
+    - "full stack"
+    - "backend"
+    - "frontend"
+  
+  # Excluded seniority levels
+  excluded_seniority:
+    - "director"
+    - "vp"
+    - "c-level"
+    - "executive"
+  
+  # Preferred seniority (if specified, only these will be included)
+  preferred_seniority:
+    - "fresher"
+    - "junior"
+    - "mid"
+    - "senior"
+
+# Posting Configuration
+posting:
+  # Platforms to post to
+  platforms:
+    - "linkedin"
+    - "x"
+  
+  # Posting schedule (24-hour format, Asia/Kolkata timezone)
+  schedule:
+    linkedin:
+      - "09:00"
+      - "18:00"
+    x:
+      - "10:00"
+      - "19:00"
+  
+  # Maximum posts per day per platform
+  max_posts_per_day:
+    linkedin: 4
+    x: 6
+  
+  # Caption generation preferences
+  captions:
+    linkedin:
+      max_length: 1300
+      hashtag_count: 4
+      tone: "professional"
+      audience: "Indian tech professionals"
+    
+    x:
+      max_length: 280
+      hashtag_count: 2
+      tone: "casual"
+      audience: "tech community"
+
+# Job Sources Configuration
+job_sources:
+  # RapidAPI endpoints
+  rapidapi:
+    indeed:
+      enabled: true
+      max_results: 100
+      keywords: ["python developer", "machine learning engineer", "data scientist"]
+    
+    naukri:
+      enabled: true
+      max_results: 100
+      keywords: ["python", "ml", "data science"]
+    
+    linkedin_jobs:
+      enabled: true
+      max_results: 100
+      keywords: ["python", "machine learning", "data science"]
+  
+  # Direct ATS APIs
+  ats:
+    greenhouse:
+      enabled: true
+      companies: ["google", "microsoft", "amazon"]
+    
+    lever:
+      enabled: true
+      companies: ["netflix", "spotify", "uber"]
+    
+    smartrecruiters:
+      enabled: true
+      companies: ["adobe", "salesforce", "oracle"]
+    
+    workday:
+      enabled: true
+      companies: ["apple", "meta", "nvidia"]
+  
+  # Job aggregators
+  aggregators:
+    jooble:
+      enabled: true
+      max_results: 200
+    
+    adzuna:
+      enabled: true
+      max_results: 200
+
+# Database Configuration
+database:
+  # Use SQLite for development, MySQL for production
+  type: "sqlite"  # or "mysql"
+  sqlite_path: "./job_automation.db"
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "job_automation"
+    username: "username"
+    password: "password"
+    charset: "utf8mb4"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} | {message}"
+  file: "logs/job_automation.log"
+  max_size: "10 MB"
+  retention: "30 days"
+
+# LLM Configuration - Gemini
+llm:
+  provider: "gemini"
+  model: "gemini-pro"
+  max_tokens: 150
+  temperature: 0.7
+  caption_style: "professional"
+  emoji_enabled: true
+  hashtag_count: 3
+
+# Image Generation Configuration
+image_generation:
+  enabled: true
+  provider: "gemini"
+  model: "gemini-pro-vision"
+  style: "professional"
+  size: "1024x1024"
+  include_logo: true
+  include_job_title: true
+  include_company_name: true
+  background_style: "clean"
