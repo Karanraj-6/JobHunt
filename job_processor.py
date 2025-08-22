@@ -3,6 +3,7 @@ Job processing, normalization, and storage management.
 """
 import os
 import re
+import yaml
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from loguru import logger
@@ -10,7 +11,7 @@ from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
 
 from database import get_db
-from job_models import Job, JobNormalizer
+from job_models import Job, JobNormalizer, is_duplicate_job
 
 # Load environment variables from .env file
 try:

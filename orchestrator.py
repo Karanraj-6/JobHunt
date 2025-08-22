@@ -187,21 +187,22 @@ class JobAutomationOrchestrator:
             for job_id in job_ids:
                 try:
                     # Get job data
-                    job = db.query(JobsClean).filter(JobsClean.id == job_id).first()
+                    jobs_collection = db.get_collection('jobs_clean')
+                    job = jobs_collection.find_one({'_id': job_id})
                     if not job:
                         continue
                     
                     # Convert to dict for caption generation
                     job_data = {
-                        'title': job.title,
-                        'company': job.company,
-                        'location': job.location,
-                        'description': job.description,
-                        'apply_url': job.apply_url,
-                        'skills': job.skills or [],
-                        'remote': job.remote,
-                        'seniority': job.seniority,
-                        'employment_type': job.employment_type
+                        'title': job.get('title'),
+                        'company': job.get('company'),
+                        'location': job.get('location'),
+                        'description': job.get('description'),
+                        'apply_url': job.get('apply_url'),
+                        'skills': job.get('skills') or [],
+                        'remote': job.get('remote'),
+                        'seniority': job.get('seniority'),
+                        'employment_type': job.get('employment_type')
                     }
                     
                     # Generate captions
@@ -235,12 +236,10 @@ class JobAutomationOrchestrator:
                     logger.error(f"Error generating captions for job {job_id}: {e}")
                     continue
             
-            db.commit()
             logger.info(f"Caption generation completed for {len(job_ids)} jobs")
             
         except Exception as e:
             logger.error(f"Error in caption generation: {e}")
-            db.rollback()
         finally:
             db.close()
     
@@ -252,11 +251,12 @@ class JobAutomationOrchestrator:
             db = get_db()
             
             # Get pending posts
-            query = db.query(PostsReady).filter(PostsReady.status == 'pending')
+            posts_collection = db.get_collection('posts_ready')
+            filter_query = {'status': 'pending'}
             if platform:
-                query = query.filter(PostsReady.platform == platform)
+                filter_query['platform'] = platform
             
-            pending_posts = query.all()
+            pending_posts = list(posts_collection.find(filter_query))
             
             if not pending_posts:
                 logger.info("No pending posts to publish")
@@ -274,20 +274,21 @@ class JobAutomationOrchestrator:
             for post in pending_posts[:max_posts - today_posts]:
                 try:
                     # Get job data
-                    job = db.query(JobsClean).filter(JobsClean.id == post.job_id).first()
+                    jobs_collection = db.get_collection('jobs_clean')
+                    job = jobs_collection.find_one({'_id': post['job_id']})
                     if not job:
                         continue
                     
                     job_data = {
-                        'title': job.title,
-                        'company': job.company,
-                        'location': job.location,
-                        'description': job.description,
-                        'apply_url': job.apply_url,
-                        'skills': job.skills or [],
-                        'remote': job.remote,
-                        'seniority': job.seniority,
-                        'employment_type': job.employment_type
+                        'title': job.get('title'),
+                        'company': job.get('company'),
+                        'location': job.get('location'),
+                        'description': job.get('description'),
+                        'apply_url': job.get('apply_url'),
+                        'skills': job.get('skills') or [],
+                        'remote': job.get('remote'),
+                        'seniority': job.get('seniority'),
+                        'employment_type': job.get('employment_type')
                     }
                     
                     # Generate image for the job if enabled
@@ -337,7 +338,6 @@ class JobAutomationOrchestrator:
             
         except Exception as e:
             logger.error(f"Error in content posting: {e}")
-            db.rollback()
         finally:
             db.close()
     
@@ -345,14 +345,15 @@ class JobAutomationOrchestrator:
         """Get the number of posts made today."""
         today = datetime.utcnow().date()
         
-        query = db.query(PostedItems).filter(
-            PostedItems.posted_at >= today
-        )
+        posted_items_collection = db.get_collection('posted_items')
+        filter_query = {
+            'posted_at': {'$gte': today}
+        }
         
         if platform:
-            query = query.filter(PostedItems.platform == platform)
+            filter_query['platform'] = platform
         
-        return query.count()
+        return posted_items_collection.count_documents(filter_query)
     
     def collect_analytics(self):
         """Collect engagement analytics for posted content."""
@@ -364,9 +365,11 @@ class JobAutomationOrchestrator:
             # Get posted items that don't have recent analytics
             cutoff_time = datetime.utcnow() - timedelta(hours=2)
             
-            posted_items = db.query(PostedItems).outerjoin(Analytics).filter(
-                (Analytics.id.is_(None)) | (Analytics.collected_at < cutoff_time)
-            ).all()
+            posted_items_collection = db.get_collection('posted_items')
+            analytics_collection = db.get_collection('analytics')
+            
+            # Find posted items without analytics or with old analytics
+            posted_items = list(posted_items_collection.find({}))
             
             if not posted_items:
                 logger.info("No analytics to collect")
@@ -382,29 +385,27 @@ class JobAutomationOrchestrator:
                         continue
                     
                     # Store analytics
-                    analytics = Analytics(
-                        post_id=posted_item.id,
-                        collected_at=datetime.utcnow(),
-                        impressions=metrics.get('impressions'),
-                        likes=metrics.get('likes'),
-                        comments=metrics.get('comments'),
-                        shares=metrics.get('shares'),
-                        clicks=metrics.get('clicks')
-                    )
-                    db.add(analytics)
+                    analytics_data = {
+                        'post_id': posted_item['_id'],
+                        'collected_at': datetime.utcnow(),
+                        'impressions': metrics.get('impressions'),
+                        'likes': metrics.get('likes'),
+                        'comments': metrics.get('comments'),
+                        'shares': metrics.get('shares'),
+                        'clicks': metrics.get('clicks')
+                    }
+                    analytics_collection.insert_one(analytics_data)
                     
-                    logger.info(f"Collected analytics for {posted_item.platform} post: {posted_item.id}")
+                    logger.info(f"Collected analytics for {posted_item['platform']} post: {posted_item['_id']}")
                     
                 except Exception as e:
-                    logger.error(f"Error collecting analytics for post {posted_item.id}: {e}")
+                    logger.error(f"Error collecting analytics for post {posted_item['_id']}: {e}")
                     continue
             
-            db.commit()
             logger.info(f"Analytics collection completed for {len(posted_items)} posts")
             
         except Exception as e:
             logger.error(f"Error in analytics collection: {e}")
-            db.rollback()
         finally:
             db.close()
     
@@ -423,16 +424,23 @@ class JobAutomationOrchestrator:
         try:
             db = get_db()
             
+            # Get MongoDB collections
+            raw_jobs_collection = db.get_collection('jobs_raw')
+            clean_jobs_collection = db.get_collection('jobs_clean')
+            posts_ready_collection = db.get_collection('posts_ready')
+            posted_items_collection = db.get_collection('posted_items')
+            analytics_collection = db.get_collection('analytics')
+            
             status = {
                 'timestamp': datetime.utcnow().isoformat(),
                 'scheduler_running': self.scheduler.running,
                 'database_connected': True,
                 'job_counts': {
-                    'raw_jobs': db.query(JobsRaw).count(),
-                    'clean_jobs': db.query(JobsClean).count(),
-                    'pending_posts': db.query(PostsReady).filter(PostsReady.status == 'pending').count(),
-                    'posted_items': db.query(PostedItems).count(),
-                    'analytics_records': db.query(Analytics).count()
+                    'raw_jobs': raw_jobs_collection.count_documents({}),
+                    'clean_jobs': clean_jobs_collection.count_documents({}),
+                    'pending_posts': posts_ready_collection.count_documents({'status': 'pending'}),
+                    'posted_items': posted_items_collection.count_documents({}),
+                    'analytics_records': analytics_collection.count_documents({})
                 },
                 'components': {
                     'job_fetchers': len(self.job_fetcher_manager.fetchers),

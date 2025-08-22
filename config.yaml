@@ -1,10 +1,3 @@
-import yaml
-
-with open('config.yaml', 'r') as file:
-    config = yaml.safe_load(file)
-
-print(config)
-
 # Job Filtering Configuration
 job_filters:
   # Allowed locations (case-insensitive partial matches)
@@ -105,8 +98,8 @@ database:
   # Use MongoDB for primary data store
   type: "mongodb"
   mongodb:
-    uri: "mongodb://localhost:27017"
-    database: "job_automation"
+    uri: "mongodb+srv://karanraj3056:KL3ARGzj5BrUrzeP@jobauto.9xnjqy4.mongodb.net/?retryWrites=true&w=majority&appName=Jobauto"
+    database: "Job_auto"
 
 # Logging Configuration
 logging:

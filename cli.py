@@ -113,13 +113,13 @@ def list_jobs_command(args):
         
         print(f"\n=== Jobs ({len(jobs)} found) ===")
         for job in jobs:
-            print(f"\nTitle: {job.title}")
-            print(f"Company: {job.company}")
-            print(f"Location: {job.location}")
-            print(f"Skills: {', '.join(job.skills) if job.skills else 'None'}")
-            print(f"Remote: {'Yes' if job.remote else 'No'}")
-            print(f"Created: {job.created_at}")
-            print(f"Apply URL: {job.apply_url}")
+            print(f"\nTitle: {job.get('title', 'N/A')}")
+            print(f"Company: {job.get('company', 'N/A')}")
+            print(f"Location: {job.get('location', 'N/A')}")
+            print(f"Skills: {', '.join(job.get('skills', [])) if job.get('skills') else 'None'}")
+            print(f"Remote: {'Yes' if job.get('remote') else 'No'}")
+            print(f"Created: {job.get('created_at', 'N/A')}")
+            print(f"Apply URL: {job.get('apply_url', 'N/A')}")
             print("-" * 50)
         
     except Exception as e:
@@ -144,11 +144,11 @@ def list_posts_command(args):
         
         print(f"\n=== Posts ({len(posts)} found) ===")
         for post in posts:
-            print(f"\nPlatform: {post.platform}")
-            print(f"Status: {post.status}")
-            print(f"Created: {post.created_at}")
-            print(f"Scheduled: {post.scheduled_for or 'Not scheduled'}")
-            print(f"Caption Preview: {post.caption[:100]}...")
+            print(f"\nPlatform: {post.get('platform', 'N/A')}")
+            print(f"Status: {post.get('status', 'N/A')}")
+            print(f"Created: {post.get('created_at', 'N/A')}")
+            print(f"Scheduled: {post.get('scheduled_for', 'Not scheduled')}")
+            print(f"Caption Preview: {post.get('caption', '')[:100] if post.get('caption') else 'No caption'}...")
             print("-" * 50)
         
     except Exception as e:
@@ -172,13 +172,13 @@ def analytics_command(args):
         
         print(f"\n=== Analytics ({len(analytics)} records) ===")
         for record in analytics:
-            print(f"\nPost ID: {record.post_id}")
-            print(f"Collected: {record.collected_at}")
-            print(f"Impressions: {record.impressions or 'N/A'}")
-            print(f"Likes: {record.likes or 'N/A'}")
-            print(f"Comments: {record.comments or 'N/A'}")
-            print(f"Shares: {record.shares or 'N/A'}")
-            print(f"Clicks: {record.clicks or 'N/A'}")
+            print(f"\nPost ID: {record.get('post_id', 'N/A')}")
+            print(f"Collected: {record.get('collected_at', 'N/A')}")
+            print(f"Impressions: {record.get('impressions', 'N/A')}")
+            print(f"Likes: {record.get('likes', 'N/A')}")
+            print(f"Comments: {record.get('comments', 'N/A')}")
+            print(f"Shares: {record.get('shares', 'N/A')}")
+            print(f"Clicks: {record.get('clicks', 'N/A')}")
             print("-" * 50)
         
     except Exception as e:
