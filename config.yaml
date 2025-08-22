@@ -1,3 +1,4 @@
+
 # Job Filtering Configuration
 job_filters:
   # Allowed locations (case-insensitive partial matches)
@@ -98,7 +99,7 @@ database:
   # Use MongoDB for primary data store
   type: "mongodb"
   mongodb:
-    uri: "mongodb+srv://karanraj3056:KL3ARGzj5BrUrzeP@jobauto.9xnjqy4.mongodb.net/?retryWrites=true&w=majority&appName=Jobauto"
+    uri: ""
     database: "Job_auto"
 
 # Logging Configuration
