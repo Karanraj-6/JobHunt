@@ -8,9 +8,16 @@ from datetime import datetime
 from loguru import logger
 import yaml
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.info("Environment variables loaded from .env file")
+except ImportError:
+    logger.warning("python-dotenv not installed, environment variables may not be loaded")
+
 from orchestrator import JobAutomationOrchestrator
 from database import init_database, get_db
-from models import JobsClean, PostsReady, PostedItems, Analytics
 
 def setup_logging():
     """Setup logging configuration."""
@@ -28,9 +35,8 @@ def init_command(args):
     """Initialize the database and create tables."""
     try:
         logger.info("Initializing database...")
-        db_manager = init_database(args.config)
-        db_manager.create_tables()
-        logger.success("Database initialized successfully")
+        init_database(args.config)
+        logger.success("Database initialized successfully (MongoDB indexes ensured)")
         
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
@@ -91,27 +97,19 @@ def list_jobs_command(args):
     """List jobs in the system."""
     try:
         init_database(args.config)
-        db = get_db()
-        
-        query = db.query(JobsClean)
-        
-        # Apply filters
+        dbm = get_db()
+        col = dbm.get_collection('jobs_clean')
+        mongo_query = {}
         if args.company:
-            query = query.filter(JobsClean.company.ilike(f"%{args.company}%"))
-        
+            mongo_query['company'] = { '$regex': args.company, '$options': 'i' }
         if args.location:
-            query = query.filter(JobsClean.location.ilike(f"%{args.location}%"))
-        
+            mongo_query['location'] = { '$regex': args.location, '$options': 'i' }
         if args.skills:
-            skills_filter = args.skills.split(',')
-            for skill in skills_filter:
-                query = query.filter(JobsClean.skills.contains([skill.strip()]))
-        
-        # Apply limit
-        if args.limit:
-            query = query.limit(args.limit)
-        
-        jobs = query.all()
+            skills = [s.strip() for s in args.skills.split(',') if s.strip()]
+            if skills:
+                mongo_query['skills'] = { '$in': skills }
+        cursor = col.find(mongo_query).limit(args.limit or 50)
+        jobs = list(cursor)
         
         print(f"\n=== Jobs ({len(jobs)} found) ===")
         for job in jobs:
@@ -128,28 +126,21 @@ def list_jobs_command(args):
         logger.error(f"Failed to list jobs: {e}")
         sys.exit(1)
     finally:
-        db.close()
+        pass
 
 def list_posts_command(args):
     """List posts in the system."""
     try:
         init_database(args.config)
-        db = get_db()
-        
-        query = db.query(PostsReady)
-        
-        # Apply filters
+        dbm = get_db()
+        col = dbm.get_collection('posts_ready')
+        mongo_query = {}
         if args.platform:
-            query = query.filter(PostsReady.platform == args.platform)
-        
+            mongo_query['platform'] = args.platform
         if args.status:
-            query = query.filter(PostsReady.status == args.status)
-        
-        # Apply limit
-        if args.limit:
-            query = query.limit(args.limit)
-        
-        posts = query.all()
+            mongo_query['status'] = args.status
+        cursor = col.find(mongo_query).sort('created_at', -1).limit(args.limit or 50)
+        posts = list(cursor)
         
         print(f"\n=== Posts ({len(posts)} found) ===")
         for post in posts:
@@ -164,25 +155,20 @@ def list_posts_command(args):
         logger.error(f"Failed to list posts: {e}")
         sys.exit(1)
     finally:
-        db.close()
+        pass
 
 def analytics_command(args):
     """Show analytics data."""
     try:
         init_database(args.config)
-        db = get_db()
-        
-        query = db.query(Analytics).join(PostedItems)
-        
-        # Apply filters
+        dbm = get_db()
+        col = dbm.get_collection('analytics')
+        mongo_query = {}
         if args.platform:
-            query = query.filter(PostedItems.platform == args.platform)
-        
-        # Apply limit
-        if args.limit:
-            query = query.limit(args.limit)
-        
-        analytics = query.all()
+            # Need to filter by platform by joining posted_items; do basic filter by storing platform on analytics if available
+            mongo_query['platform'] = args.platform
+        cursor = col.find(mongo_query).sort('collected_at', -1).limit(args.limit or 50)
+        analytics = list(cursor)
         
         print(f"\n=== Analytics ({len(analytics)} records) ===")
         for record in analytics:
@@ -199,7 +185,7 @@ def analytics_command(args):
         logger.error(f"Failed to get analytics: {e}")
         sys.exit(1)
     finally:
-        db.close()
+        pass
 
 def start_command(args):
     """Start the orchestrator."""
@@ -229,7 +215,7 @@ Examples:
   python cli.py post --platform linkedin # Post to LinkedIn only
   python cli.py list-jobs --limit 10    # List 10 jobs
   python cli.py list-posts --status pending # List pending posts
-  python cli.py analytics --platform x  # Show X analytics
+  python cli.py analytics --platform linkedin # Show LinkedIn analytics
   python cli.py start                   # Start the orchestrator
         """
     )
@@ -255,7 +241,7 @@ Examples:
     post_parser = subparsers.add_parser('post', help='Manually post content')
     post_parser.add_argument(
         '--platform', '-p',
-        choices=['linkedin', 'x'],
+        choices=['linkedin'],
         help='Platform to post to (default: all)'
     )
     
@@ -268,13 +254,13 @@ Examples:
     
     # List posts command
     list_posts_parser = subparsers.add_parser('list-posts', help='List posts')
-    list_posts_parser.add_argument('--platform', choices=['linkedin', 'x'], help='Filter by platform')
+    list_posts_parser.add_argument('--platform', choices=['linkedin'], help='Filter by platform')
     list_posts_parser.add_argument('--status', choices=['pending', 'posted', 'failed'], help='Filter by status')
     list_posts_parser.add_argument('--limit', type=int, help='Limit number of results')
     
     # Analytics command
     analytics_parser = subparsers.add_parser('analytics', help='Show analytics')
-    analytics_parser.add_argument('--platform', choices=['linkedin', 'x'], help='Filter by platform')
+    analytics_parser.add_argument('--platform', choices=['linkedin'], help='Filter by platform')
     analytics_parser.add_argument('--limit', type=int, help='Limit number of results')
     
     # Start command

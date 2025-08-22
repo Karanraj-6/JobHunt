@@ -1,17 +1,26 @@
 """
-Image generation using Gemini API for job postings.
-Generates professional images of company logos with job information.
+AI-powered image generation for job postings using Google Gemini.
 """
-
 import os
 import base64
-from typing import Optional, Dict, Any
+import json
+from typing import Optional, Dict, Any, List
 from pathlib import Path
+from loguru import logger
 import google.generativeai as genai
 from PIL import Image, ImageDraw, ImageFont
-from loguru import logger
+import requests
+from io import BytesIO
 import yaml
 from tenacity import retry, stop_after_attempt, wait_exponential
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.info("Environment variables loaded from .env file")
+except ImportError:
+    logger.warning("python-dotenv not installed, environment variables may not be loaded")
 
 
 class GeminiImageGenerator:
@@ -118,7 +127,7 @@ class GeminiImageGenerator:
         - Subtle background patterns or gradients
         - Include visual elements representing the job role
         - High contrast for readability
-        - Suitable for social media platforms (LinkedIn, X)
+        - Suitable for social media platforms (LinkedIn)
         
         The image should look like a professional job posting card that would attract top talent.
         """

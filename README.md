@@ -1,60 +1,59 @@
-# Job Automation Application
+# Job Automation System
 
-A comprehensive Python application that automates job posting to social media platforms (LinkedIn and X/Twitter) with intelligent job fetching, caption generation, and scheduling.
+An intelligent Python application that automatically fetches software engineering jobs from multiple sources, generates engaging captions using Google Gemini AI, creates AI-generated job posting images, and posts them to LinkedIn with optimal timing and engagement tracking.
 
-## 🚀 Features
+## Features
 
-- **Multi-Source Job Fetching**: Integrates with RapidAPI, ATS systems (Greenhouse, Lever, SmartRecruiters, Workday), and job aggregators (Jooble, Adzuna)
-- **Intelligent Job Processing**: Automatic deduplication, filtering by skills/location/seniority, and normalization
-- **AI-Powered Caption Generation**: Uses Google Gemini to create engaging, platform-optimized social media captions
-- **AI Image Generation**: Automatically generates professional job posting images with company logos and job information using Gemini
-- **Automated Social Media Posting**: 
-  - LinkedIn via Selenium automation
-  - X (Twitter) via official API
-- **Smart Scheduling**: Configurable posting schedules with rate limiting and engagement optimization
-- **Analytics & Monitoring**: Track post performance and engagement metrics
-- **CLI Interface**: Easy-to-use command-line tools for manual operations and monitoring
+- **Multi-Source Job Fetching**: Integrates with RapidAPI (Indeed) and Jooble for comprehensive job listings
+- **AI-Powered Caption Generation**: Uses Google Gemini to create professional, engaging LinkedIn posts
+- **AI Image Generation**: Creates custom job posting images with company logos and job details using Gemini
+- **LinkedIn Automation**: Automated posting via Selenium with anti-detection measures
+- **Smart Scheduling**: Intelligent posting schedule optimization based on engagement analytics
+- **Database Management**: MongoDB support with comprehensive job tracking and analytics
+- **Deduplication & Filtering**: Advanced job matching and filtering by skills, location, and seniority
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Job Sources   │    │  Job Processor  │    │ Caption Gen.    │
-│                 │    │                 │    │                 │
-│ • RapidAPI      │───▶│ • Normalization │───▶│ • Gemini API    │
-│ • ATS APIs      │    │ • Deduplication │    │ • Platform Opt. │
-│ • Aggregators   │    │ • Filtering     │    │ • Hashtags      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                │                       │
-                                ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Database      │    │   Scheduler     │    │ Social Posters  │
-│                 │    │                 │    │                 │
-│ • Raw Jobs      │◀───│ • Cron Jobs     │───▶│ • LinkedIn      │
-│ • Clean Jobs    │    │ • Rate Limiting │    │ • X (Twitter)   │
-│ • Posts         │    │ • Optimization  │    │ • Analytics     │
-│ • Analytics     │    └─────────────────┘    └─────────────────┘
-└─────────────────┘
-                                │                       │
-                                ▼                       ▼
-                    ┌─────────────────┐    ┌─────────────────┐
-                    │ Image Generator │    │   Content      │
-                    │                 │    │                 │
-                    │ • Gemini Vision │───▶│ • Text + Image  │
-                    │ • Company Logos │    │ • Professional  │
-                    │ • Job Info      │    │ • Social Ready  │
-                    └─────────────────┘    └─────────────────┘
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   Job Sources   │    │  Job Processor   │    │  Caption Gen    │
+│                 │    │                  │    │                 │
+│ • RapidAPI      │───▶│ • Normalization  │───▶│ • Gemini AI     │
+│ • Jooble        │    │ • Deduplication  │    │ • Style Config  │
+│                 │    │ • Filtering      │    │ • Hashtags      │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │                        │
+                                ▼                        ▼
+                       ┌──────────────────┐    ┌─────────────────┐
+                       │   Database       │    │  Image Gen      │
+                       │                  │    │                 │
+                       │ • MongoDB       │    │ • Gemini Vision │
+                       │ • Collections    │    │ • Company Logos │
+                       │ • Indexes       │    │ • Job Details   │
+                       │ • Analytics     │    │ • Fallback PIL  │
+                       └──────────────────┘    └─────────────────┘
+                                │                        │
+                                ▼                        ▼
+                       ┌──────────────────┐    ┌─────────────────┐
+                       │   Scheduler      │    │  Social Poster  │
+                       │                  │    │                 │
+                       │ • APScheduler    │───▶│ • LinkedIn      │
+                       │ • Cron Jobs      │    │ • Selenium      │
+                       │ • Timezone       │    │ • Anti-Detection│
+                       └──────────────────┘    └─────────────────┘
 ```
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Python 3.10+
-- Chrome/Chromium browser (for LinkedIn automation)
-- MySQL 8.0+ (for production) or SQLite (for development)
-- API keys for job sources and LLM services
-- Social media account credentials
+- MongoDB 5.0+ (local or cloud instance)
+- Chrome browser (for LinkedIn automation)
+- Google Gemini API key
+- RapidAPI key
+- Jooble API key
+- LinkedIn account credentials
 
-## 🛠️ Installation
+## Installation
 
 1. **Clone the repository**
    ```bash
@@ -73,21 +72,15 @@ A comprehensive Python application that automates job posting to social media pl
    pip install -r requirements.txt
    ```
 
-4. **Setup environment variables**
+4. **Setup MongoDB**
+   - **Local MongoDB**: Install and start MongoDB service
+   - **Cloud MongoDB**: Use MongoDB Atlas or similar service
+   - Update connection string in `.env` file
+
+5. **Configure environment**
    ```bash
    cp env.template .env
    # Edit .env with your API keys and credentials
-   ```
-
-5. **Setup MySQL (for production)**
-   ```bash
-   # Create MySQL database
-   mysql -u root -p
-   CREATE DATABASE job_automation CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   CREATE USER 'job_user'@'localhost' IDENTIFIED BY 'your_password';
-   GRANT ALL PRIVILEGES ON job_automation.* TO 'job_user'@'localhost';
-   FLUSH PRIVILEGES;
-   EXIT;
    ```
 
 6. **Initialize database**
@@ -95,58 +88,40 @@ A comprehensive Python application that automates job posting to social media pl
    python cli.py init
    ```
 
-## ⚙️ Configuration
+## Configuration
 
-### Environment Variables
-
-Create a `.env` file with the following variables:
+### Environment Variables (.env)
 
 ```bash
-# Database
-DATABASE_URL=mysql://username:password@localhost:3306/job_automation
+# MongoDB Configuration
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DB=job_automation
 
-# Job Source APIs
-RAPIDAPI_KEY=your_rapidapi_key
-JOOBLE_API_KEY=your_jooble_key
-ADZUNA_APP_ID=your_adzuna_app_id
-ADZUNA_APP_KEY=your_adzuna_app_key
-
-# ATS APIs
-GREENHOUSE_API_KEY=your_greenhouse_key
-LEVER_API_KEY=your_lever_key
-SMARTRECRUITERS_API_KEY=your_smartrecruiters_key
-WORKDAY_API_KEY=your_workday_key
-
-# LLM APIs - Gemini
-GOOGLE_API_KEY=your_google_api_key
-
-# X (Twitter) API
-X_CLIENT_ID=your_x_client_id
-X_CLIENT_SECRET=your_x_client_secret
-X_ACCESS_TOKEN=your_x_access_token
-X_ACCESS_TOKEN_SECRET=your_x_access_token_secret
+# Google Gemini API
+GOOGLE_API_KEY=your_gemini_api_key_here
 
 # LinkedIn Credentials
-LINKEDIN_EMAIL=your_linkedin_email
+LINKEDIN_EMAIL=your_linkedin_email@example.com
 LINKEDIN_PASSWORD=your_linkedin_password
+
+# Job Sources
+RAPIDAPI_KEY=your_rapidapi_key_here
+JOOBLE_API_KEY=your_jooble_api_key_here
 ```
 
-### Configuration File
+### Configuration File (config.yaml)
 
-The `config.yaml` file controls:
-- Job filtering rules (locations, skills, seniority)
-- Posting schedules and limits
-- Platform-specific caption preferences
-- Job source configurations
-- AI model settings (Gemini)
-- Image generation preferences and styling
-- Database configuration (SQLite for development, MySQL for production)
+The application uses a YAML configuration file for:
+- Job source preferences and API settings
+- AI model settings (Gemini configuration)
+- Image generation preferences
+- Posting schedules and platform settings
+- Database configuration
+- Logging and monitoring settings
 
-## 🚀 Usage
+## Usage
 
 ### Command Line Interface
-
-The application provides a comprehensive CLI for all operations:
 
 ```bash
 # Initialize database
@@ -160,217 +135,144 @@ python cli.py fetch
 
 # Manually post content
 python cli.py post
-python cli.py post --platform linkedin
 
-# List jobs with filters
-python cli.py list-jobs --company "Google" --location "India" --limit 10
-
-# List posts by status
-python cli.py list-posts --status pending --platform linkedin
-
-# View analytics
-python cli.py analytics --platform x --limit 20
-
-# Start the orchestrator (automated mode)
+# Start automated mode
 python cli.py start
+
+# Run system tests
+python test_system.py
+
+# Test Gemini integration
+python test_gemini.py
 ```
 
 ### Automated Mode
 
-Start the orchestrator to run automatically:
+The application can run in automated mode with:
+- Scheduled job fetching (every 6 hours)
+- Automated caption generation
+- AI image creation
+- Scheduled LinkedIn posting (9 AM and 6 PM IST)
+- Engagement analytics collection
 
-```bash
-python cli.py start
-```
+## Job Sources
 
-This will:
-- Fetch jobs every 6 hours
-- Post content according to schedule
-- Collect analytics every 2 hours
-- Handle all automation in the background
+### RapidAPI Integration
+- **Indeed Jobs**: Comprehensive job listings with advanced filtering
+- **Configurable Keywords**: Software engineering, Python, ML, Data Science
+- **Rate Limiting**: Respects API limits with intelligent retry logic
 
-## 🔧 Job Sources
+### Jooble Integration
+- **Global Job Aggregator**: Access to millions of job listings
+- **Smart Filtering**: Location, skills, and experience-based filtering
+- **Real-time Updates**: Fresh job postings as they become available
 
-### RapidAPI Endpoints
-- **Indeed Jobs**: Search jobs by keywords and location
-- **Naukri**: Indian job portal integration
-- **LinkedIn Jobs**: Professional network job listings
+## AI Features
 
-### ATS Systems
-- **Greenhouse**: Company-specific job boards
-- **Lever**: Modern ATS integration
-- **SmartRecruiters**: Enterprise recruitment platform
-- **Workday**: HR management system
+### Caption Generation
+- **Google Gemini Integration**: Advanced AI-powered caption creation
+- **Professional Style**: Business-appropriate tone for LinkedIn
+- **Hashtag Optimization**: Relevant industry hashtags for better reach
+- **Customizable Templates**: Configurable caption styles and lengths
 
-### Job Aggregators
-- **Jooble**: Global job search engine
-- **Adzuna**: UK-based job aggregator
+### Image Generation
+- **Gemini Vision**: AI-generated job posting images
+- **Company Branding**: Integration with company logos and branding
+- **Professional Design**: Clean, modern layouts for social media
+- **Fallback System**: Pillow-based image generation if AI fails
 
-## 📱 Social Media Platforms
+## Social Media Platforms
 
 ### LinkedIn
-- Uses Selenium automation for posting
-- Respects platform guidelines and rate limits
-- Includes random delays to avoid detection
-- Supports AI-generated job posting images
-- Automatic image upload and attachment
+- **Automated Posting**: Selenium-based automation with anti-detection
+- **Image Support**: AI-generated job posting images with company branding
+- **Professional Content**: Optimized for LinkedIn's business audience
+- **Engagement Tracking**: Monitor likes, comments, and shares
 
-### X (Twitter)
-- Official API v1.1 and v2 integration
-- OAuth 1.0a and OAuth 2.0 support
-- Automatic character limit enforcement
-- Supports AI-generated job posting images
-- Engagement metrics collection
+## Database Schema
 
-## 🤖 AI Caption Generation
+The application uses several key tables:
+- `jobs_raw`: Raw job data from various sources
+- `jobs_clean`: Processed and normalized job listings
+- `posts_ready`: Generated captions ready for posting
+- `posted_items`: Record of all posted content
+- `analytics`: Engagement metrics and performance data
 
-The system uses Google Gemini to generate engaging captions:
+## Monitoring & Analytics
 
-- **LinkedIn**: Professional tone, 4-6 hashtags, 1300 character limit
-- **X**: Casual tone, 2-3 hashtags, 280 character limit
-- **Smart Optimization**: Emoji placement, hashtag optimization, platform-specific formatting
-- **Fallback Generation**: Template-based captions if LLM fails
+- **Real-time Logging**: Comprehensive logging with loguru
+- **Performance Metrics**: Track posting success rates and engagement
+- **Error Handling**: Intelligent retry logic with exponential backoff
+- **Health Checks**: System status monitoring and alerting
 
-## 🎨 AI Image Generation
-
-The system automatically generates professional images for job postings:
-
-- **Gemini Vision Integration**: Uses Google's Gemini Pro Vision model
-- **Company Branding**: Incorporates company logos and visual identity
-- **Job Information Display**: Shows job title, company, location, and key skills
-- **Professional Design**: Clean, corporate aesthetic suitable for social media
-- **Automatic Fallback**: Template-based image generation if AI fails
-- **Image Management**: Automatic cleanup of old generated images
-- **Multi-Platform Support**: Images optimized for LinkedIn and X posting
-
-## 📊 Analytics & Monitoring
-
-Track post performance with:
-- Impressions and reach
-- Engagement metrics (likes, comments, shares)
-- Click-through rates
-- Platform-specific insights
-- Historical performance trends
-
-## 🔒 Security & Best Practices
-
-- **Credential Management**: Secure storage of API keys and passwords
-- **Rate Limiting**: Respects platform rate limits and guidelines
-- **Error Handling**: Comprehensive error handling and retry logic
-- **Logging**: Detailed logging for debugging and monitoring
-- **Resource Management**: Proper cleanup of database connections and browser sessions
-
-## 🚨 Important Notes
-
-### LinkedIn Automation
-- **Respect Platform Rules**: The LinkedIn automation follows platform guidelines
-- **Manual Login**: First-time setup may require manual login verification
-- **Rate Limiting**: Built-in delays prevent excessive posting
-- **Detection Avoidance**: Uses advanced techniques to avoid bot detection
-
-### API Usage
-- **Rate Limits**: Respects all API rate limits
-- **Error Handling**: Graceful degradation when APIs are unavailable
-- **Retry Logic**: Automatic retry with exponential backoff
-- **Monitoring**: Tracks API usage and errors
-
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
-1. **Database Connection Errors**
-   ```bash
-   python cli.py init  # Reinitialize database
-   ```
-   
-   **MySQL Issues:**
-   - Ensure MySQL service is running: `sudo systemctl start mysql`
-   - Verify database exists: `mysql -u username -p -e "SHOW DATABASES;"`
-   - Check user permissions: `mysql -u username -p -e "SHOW GRANTS;"`
-   - Verify charset: `mysql -u username -p -e "SHOW VARIABLES LIKE 'character_set%';"`
-
-2. **LinkedIn Login Issues**
+1. **LinkedIn Login Issues**
    - Verify credentials in `.env`
    - Check for 2FA requirements
-   - Ensure Chrome/Chromium is installed
+   - Ensure account is not locked
 
-3. **API Key Errors**
-   - Verify all required API keys in `.env`
-   - Check API key permissions and quotas
-   - Ensure proper API access levels
+2. **API Rate Limits**
+   - Check RapidAPI and Jooble quotas
+   - Verify API keys are valid
+   - Review rate limiting configuration
 
-4. **Selenium Issues**
-   - Update Chrome/Chromium to latest version
-   - Check webdriver compatibility
-   - Verify system dependencies
+3. **Database Connection**
+   - Verify MongoDB service is running
+   - Check connection credentials
+   - Ensure database exists and is accessible
 
-### Debug Mode
+4. **Gemini API Issues**
+   - Verify `GOOGLE_API_KEY` is set
+   - Check API quota and billing
+   - Review model configuration
 
-Enable detailed logging:
-```bash
-export LOG_LEVEL=DEBUG
-python cli.py start
+### MongoDB Issues
+- Ensure MongoDB service is running
+- Verify user permissions and database access
+- Check connection string format in `.env`
+- Use `python setup_mongodb.py` for initial setup
+
+## Development
+
+### Project Structure
+```
+job-automation/
+├── cli.py                 # Command line interface
+├── orchestrator.py        # Main application orchestrator
+├── job_fetchers.py        # Job source integrations
+├── job_processor.py       # Job processing and filtering
+├── caption_generator.py   # AI caption generation
+├── image_generator.py     # AI image generation
+├── social_posters.py      # LinkedIn posting automation
+├── database.py            # Database management
+├── models.py              # Data models
+├── config.yaml            # Application configuration
+├── requirements.txt       # Python dependencies
+├── env.template           # Environment variables template
+├── test_system.py         # System testing
+├── test_gemini.py         # Gemini API testing
+├── setup_mongodb.py       # MongoDB setup automation
+└── README.md              # This file
 ```
 
-## 📈 Performance Optimization
-
-- **Batch Processing**: Jobs are processed in batches for efficiency
-- **Connection Pooling**: Database connections are pooled and reused
-- **Caching**: Intelligent caching of job data and captions
-- **Parallel Processing**: Multiple job sources processed concurrently
-- **Resource Management**: Automatic cleanup of unused resources
-
-## 🔄 Monitoring & Maintenance
-
-### Health Checks
-```bash
-python cli.py status  # Check system health
-```
-
-### Log Analysis
-```bash
-tail -f logs/job_automation.log  # Monitor real-time logs
-```
-
-### Database Maintenance
-```bash
-# Regular cleanup (implement as needed)
-python cli.py cleanup
-```
-
-## 🤝 Contributing
-
+### Contributing
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
 4. Add tests if applicable
 5. Submit a pull request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## ⚠️ Disclaimer
-
-This application is for educational and legitimate business use only. Users are responsible for:
-- Complying with platform terms of service
-- Respecting rate limits and guidelines
-- Using appropriate content and hashtags
-- Following local employment and advertising laws
-
-## 🆘 Support
+## Support
 
 For issues and questions:
 1. Check the troubleshooting section
-2. Review logs for error details
-3. Open an issue on GitHub
-4. Check configuration and environment variables
-
-## 🔮 Future Enhancements
-
-- Video content generation (when Gemini Veo 3 becomes available)
-- Additional social media platforms (Instagram, Facebook)
-- Advanced analytics and reporting dashboard
-- Machine learning for optimal posting times
-- Integration with CRM and HR systems
-- Mobile application for monitoring and control
+2. Review the logs in `logs/` directory
+3. Run system tests: `python test_system.py`
+4. Create an issue with detailed error information

@@ -1,16 +1,24 @@
 """
-Job processing, filtering, and deduplication.
+Job processing, normalization, and storage management.
 """
 import os
+import re
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from sqlalchemy.orm import Session
 from loguru import logger
-import yaml
+from fuzzywuzzy import fuzz
+from fuzzywuzzy import process
 
-from models import JobsRaw, JobsClean
-from job_models import Job, JobNormalizer, is_duplicate_job
 from database import get_db
+from job_models import Job, JobNormalizer
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.info("Environment variables loaded from .env file")
+except ImportError:
+    logger.warning("python-dotenv not installed, environment variables may not be loaded")
 
 class JobProcessor:
     """Handles job processing, filtering, and storage."""
@@ -142,134 +150,77 @@ class JobProcessor:
         return unique_jobs
     
     def store_raw_jobs(self, raw_jobs: Dict[str, List[Dict[str, Any]]]) -> None:
-        """Store raw jobs in the database."""
-        db = get_db()
-        
-        try:
-            for source, jobs in raw_jobs.items():
-                for raw_job in jobs:
-                    try:
-                        # Check if job already exists
-                        existing = db.query(JobsRaw).filter(
-                            JobsRaw.source == source,
-                            JobsRaw.payload.contains(raw_job)
-                        ).first()
-                        
-                        if not existing:
-                            db_job = JobsRaw(
-                                source=source,
-                                fetched_at=datetime.utcnow(),
-                                payload=raw_job
-                            )
-                            db.add(db_job)
-                    
-                    except Exception as e:
-                        logger.error(f"Error storing raw job from {source}: {e}")
-                        continue
-            
-            db.commit()
-            logger.info("Raw jobs stored successfully")
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error storing raw jobs: {e}")
-            raise
-        finally:
-            db.close()
+        """Store raw jobs in MongoDB."""
+        dbm = get_db()
+        col = dbm.get_collection('jobs_raw')
+        for source, jobs in raw_jobs.items():
+            for raw_job in jobs:
+                try:
+                    doc = {
+                        'source': source,
+                        'fetched_at': datetime.utcnow(),
+                        'payload': raw_job
+                    }
+                    col.insert_one(doc)
+                except Exception as e:
+                    logger.error(f"Error storing raw job from {source}: {e}")
+                    continue
+        logger.info("Raw jobs stored successfully")
     
     def store_clean_jobs(self, jobs: List[Job]) -> List[str]:
-        """Store clean jobs in the database and return their IDs."""
-        db = get_db()
-        stored_job_ids = []
-        
-        try:
-            for job in jobs:
-                try:
-                    # Check if job already exists
-                    existing = db.query(JobsClean).filter(
-                        JobsClean.source_job_id == job.source_job_id,
-                        JobsClean.source == job.source
-                    ).first()
-                    
-                    if existing:
-                        # Update existing job
-                        existing.title = job.title
-                        existing.company = job.company
-                        existing.location = job.location
-                        existing.description = job.description
-                        existing.apply_url = job.apply_url
-                        existing.skills = job.skills
-                        existing.seniority = job.seniority
-                        existing.remote = job.remote
-                        existing.employment_type = job.employment_type
-                        stored_job_ids.append(str(existing.id))
-                    else:
-                        # Create new job
-                        db_job = JobsClean(
-                            source_job_id=job.source_job_id,
-                            title=job.title,
-                            company=job.company,
-                            location=job.location,
-                            description=job.description,
-                            apply_url=job.apply_url,
-                            skills=job.skills,
-                            seniority=job.seniority,
-                            remote=job.remote,
-                            employment_type=job.employment_type,
-                            created_at=job.created_at
-                        )
-                        db.add(db_job)
-                        db.flush()  # Get the ID
-                        stored_job_ids.append(str(db_job.id))
-                
-                except Exception as e:
-                    logger.error(f"Error storing clean job {job.title}: {e}")
-                    continue
-            
-            db.commit()
-            logger.info(f"Successfully stored {len(stored_job_ids)} clean jobs")
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error storing clean jobs: {e}")
-            raise
-        finally:
-            db.close()
-        
+        """Store clean jobs in MongoDB and return their IDs."""
+        dbm = get_db()
+        col = dbm.get_collection('jobs_clean')
+        stored_job_ids: List[str] = []
+        for job in jobs:
+            try:
+                doc = {
+                    'source': job.source,
+                    'source_job_id': job.source_job_id,
+                    'title': job.title,
+                    'company': job.company,
+                    'location': job.location,
+                    'description': job.description,
+                    'apply_url': job.apply_url,
+                    'skills': job.skills,
+                    'seniority': job.seniority,
+                    'remote': job.remote,
+                    'employment_type': job.employment_type,
+                    'created_at': job.created_at,
+                }
+                res = col.insert_one(doc)
+                stored_job_ids.append(str(res.inserted_id))
+            except Exception as e:
+                logger.error(f"Error storing clean job {job.title}: {e}")
+                continue
+        logger.info(f"Successfully stored {len(stored_job_ids)} clean jobs")
         return stored_job_ids
     
     def get_existing_jobs(self) -> List[Job]:
-        """Get existing clean jobs from the database."""
-        db = get_db()
-        
+        """Get existing clean jobs from MongoDB."""
+        dbm = get_db()
+        col = dbm.get_collection('jobs_clean')
+        jobs: List[Job] = []
         try:
-            db_jobs = db.query(JobsClean).all()
-            
-            jobs = []
-            for db_job in db_jobs:
-                job = Job(
-                    source=db_job.source_job_id,  # Note: this should be the source, not source_job_id
-                    source_job_id=db_job.source_job_id,
-                    title=db_job.title,
-                    company=db_job.company,
-                    location=db_job.location,
-                    description=db_job.description,
-                    apply_url=db_job.apply_url,
-                    skills=db_job.skills or [],
-                    seniority=db_job.seniority,
-                    remote=db_job.remote,
-                    created_at=db_job.created_at,
-                    employment_type=db_job.employment_type
-                )
-                jobs.append(job)
-            
+            for doc in col.find({}).limit(2000):
+                jobs.append(Job(
+                    source=doc.get('source', ''),
+                    source_job_id=doc.get('source_job_id', ''),
+                    title=doc.get('title', ''),
+                    company=doc.get('company', ''),
+                    location=doc.get('location', ''),
+                    description=doc.get('description'),
+                    apply_url=doc.get('apply_url', ''),
+                    skills=doc.get('skills', []) or [],
+                    seniority=doc.get('seniority'),
+                    remote=bool(doc.get('remote', False)),
+                    created_at=doc.get('created_at') or datetime.utcnow(),
+                    employment_type=doc.get('employment_type')
+                ))
             return jobs
-            
         except Exception as e:
             logger.error(f"Error retrieving existing jobs: {e}")
             return []
-        finally:
-            db.close()
     
     def process_job_pipeline(self, raw_jobs: Dict[str, List[Dict[str, Any]]]) -> List[str]:
         """Complete job processing pipeline."""

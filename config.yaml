@@ -1,3 +1,10 @@
+import yaml
+
+with open('config.yaml', 'r') as file:
+    config = yaml.safe_load(file)
+
+print(config)
+
 # Job Filtering Configuration
 job_filters:
   # Allowed locations (case-insensitive partial matches)
@@ -47,21 +54,16 @@ posting:
   # Platforms to post to
   platforms:
     - "linkedin"
-    - "x"
   
   # Posting schedule (24-hour format, Asia/Kolkata timezone)
   schedule:
     linkedin:
       - "09:00"
       - "18:00"
-    x:
-      - "10:00"
-      - "19:00"
   
   # Maximum posts per day per platform
   max_posts_per_day:
     linkedin: 4
-    x: 6
   
   # Caption generation preferences
   captions:
@@ -70,17 +72,12 @@ posting:
       hashtag_count: 4
       tone: "professional"
       audience: "Indian tech professionals"
-    
-    x:
-      max_length: 280
-      hashtag_count: 2
-      tone: "casual"
-      audience: "tech community"
 
 # Job Sources Configuration
 job_sources:
   # RapidAPI endpoints
   rapidapi:
+    enabled: true
     indeed:
       enabled: true
       max_results: 100
@@ -96,46 +93,20 @@ job_sources:
       max_results: 100
       keywords: ["python", "machine learning", "data science"]
   
-  # Direct ATS APIs
-  ats:
-    greenhouse:
-      enabled: true
-      companies: ["google", "microsoft", "amazon"]
-    
-    lever:
-      enabled: true
-      companies: ["netflix", "spotify", "uber"]
-    
-    smartrecruiters:
-      enabled: true
-      companies: ["adobe", "salesforce", "oracle"]
-    
-    workday:
-      enabled: true
-      companies: ["apple", "meta", "nvidia"]
-  
   # Job aggregators
   aggregators:
     jooble:
       enabled: true
       max_results: 200
-    
-    adzuna:
-      enabled: true
-      max_results: 200
+      keywords: ["python", "machine learning", "ml", "data science", "nlp", "natural language processing", "deep learning", "ai", "artificial intelligence", "data engineering", "software engineering", "web development", "full stack", "backend", "frontend"]
 
 # Database Configuration
 database:
-  # Use SQLite for development, MySQL for production
-  type: "sqlite"  # or "mysql"
-  sqlite_path: "./job_automation.db"
-  mysql:
-    host: "localhost"
-    port: 3306
+  # Use MongoDB for primary data store
+  type: "mongodb"
+  mongodb:
+    uri: "mongodb://localhost:27017"
     database: "job_automation"
-    username: "username"
-    password: "password"
-    charset: "utf8mb4"
 
 # Logging Configuration
 logging:

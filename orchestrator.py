@@ -12,13 +12,20 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.info("Environment variables loaded from .env file")
+except ImportError:
+    logger.warning("python-dotenv not installed, environment variables may not be loaded")
+
 from database import init_database, get_db, close_database
 from job_fetchers import JobFetcherManager
 from job_processor import JobProcessor
 from caption_generator import CaptionGenerator
 from image_generator import ImageGenerationManager
 from social_posters import SocialPosterManager
-from models import JobsClean, PostsReady, PostedItems, Analytics
 
 class JobAutomationOrchestrator:
     """Main orchestrator for job automation workflow."""
@@ -368,11 +375,7 @@ class JobAutomationOrchestrator:
             for posted_item in posted_items:
                 try:
                     # Collect analytics based on platform
-                    if posted_item.platform == 'x':
-                        metrics = self.social_poster_manager.posters['x'].get_tweet_metrics(
-                            posted_item.external_post_id
-                        )
-                    elif posted_item.platform == 'linkedin':
+                    if posted_item.platform == 'linkedin':
                         # LinkedIn analytics collection would require additional implementation
                         metrics = {}
                     else:

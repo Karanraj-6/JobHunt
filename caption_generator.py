@@ -1,13 +1,22 @@
 """
-Caption generation using Gemini API for social media posts.
-Generates engaging captions for LinkedIn and X (Twitter) job postings.
+Caption generation using Google Gemini AI.
 """
-
 import os
-import re
-from typing import Dict, List, Optional, Any
-import google.generativeai as genai
+import random
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 from loguru import logger
+import google.generativeai as genai
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.info("Environment variables loaded from .env file")
+except ImportError:
+    logger.warning("python-dotenv not installed, environment variables may not be loaded")
+
+import re
 import yaml
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -49,7 +58,7 @@ class CaptionGenerator:
         """Generate captions for all platforms."""
         captions = {}
         
-        platforms = self.posting_config.get('platforms', ['linkedin', 'x'])
+        platforms = self.posting_config.get('platforms', ['linkedin'])
         
         for platform in platforms:
             try:
@@ -69,11 +78,9 @@ class CaptionGenerator:
         
         if platform == 'linkedin':
             return self._generate_linkedin_caption(job_data, platform_config)
-        elif platform == 'x':
-            return self._generate_x_caption(job_data, platform_config)
         else:
-            logger.warning(f"Unsupported platform: {platform}")
-            return None
+            logger.warning(f"Unsupported platform: {platform}, defaulting to LinkedIn")
+            return self._generate_linkedin_caption(job_data, platform_config)
     
     def _generate_linkedin_caption(self, job_data: Dict[str, Any], config: Dict[str, Any]) -> Optional[str]:
         """Generate LinkedIn caption."""
@@ -84,16 +91,6 @@ class CaptionGenerator:
         except Exception as e:
             logger.error(f"Error generating LinkedIn caption with Gemini: {e}")
             return self._generate_fallback_caption(job_data, 'linkedin', config)
-    
-    def _generate_x_caption(self, job_data: Dict[str, Any], config: Dict[str, Any]) -> Optional[str]:
-        """Generate X (Twitter) caption."""
-        prompt = self._build_x_prompt(job_data, config)
-        
-        try:
-            return self._generate_with_gemini(prompt, config)
-        except Exception as e:
-            logger.error(f"Error generating X caption with Gemini: {e}")
-            return self._generate_fallback_caption(job_data, 'x', config)
     
     def _build_linkedin_prompt(self, job_data: Dict[str, Any], config: Dict[str, Any]) -> str:
         """Build LinkedIn prompt."""
@@ -121,34 +118,6 @@ Constraints:
 - Focus on the opportunity and company
 
 Format: Write the post content followed by hashtags on new lines."""
-        
-        return prompt
-    
-    def _build_x_prompt(self, job_data: Dict[str, Any], config: Dict[str, Any]) -> str:
-        """Build X (Twitter) prompt."""
-        max_length = config.get('max_length', 280)
-        hashtag_count = config.get('hashtag_count', 2)
-        tone = config.get('tone', 'casual')
-        audience = config.get('audience', 'tech community')
-        
-        prompt = f"""Create a tweet (maximum {max_length} characters) about this job. Include {hashtag_count} hashtags and the link. Keep it readable and engaging.
-
-Job details:
-Title: {job_data.get('title', 'N/A')}
-Company: {job_data.get('company', 'N/A')}
-Location: {job_data.get('location', 'N/A')}
-Skills: {', '.join(job_data.get('skills', []))}
-Remote: {'Yes' if job_data.get('remote', False) else 'No'}
-Link: {job_data.get('apply_url', 'N/A')}
-
-Tone: {tone}
-Audience: {audience}
-
-Requirements:
-- Include the apply link
-- Use {hashtag_count} relevant hashtags
-- Make it engaging and shareable
-- Stay within character limit"""
         
         return prompt
     

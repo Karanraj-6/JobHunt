@@ -1,23 +1,30 @@
 """
-Social media posting modules for LinkedIn and X (Twitter).
+Social media posting automation for LinkedIn.
 """
 import os
 import time
 import random
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 from loguru import logger
-import tweepy
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.webdriver.chrome.service import Service
+from selenium.common.exceptions import NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 from tenacity import retry, stop_after_attempt, wait_exponential
 import yaml
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger.info("Environment variables loaded from .env file")
+except ImportError:
+    logger.warning("python-dotenv not installed, environment variables may not be loaded")
 
 class BaseSocialPoster:
     """Base class for social media posters."""
@@ -267,119 +274,6 @@ class LinkedInPoster(BaseSocialPoster):
         if self.driver:
             self.driver.quit()
             logger.info("LinkedIn driver closed")
-
-class XPoster(BaseSocialPoster):
-    """X (Twitter) poster using official API."""
-    
-    def __init__(self, config: dict):
-        super().__init__(config)
-        self._init_api_client()
-    
-    def _init_api_client(self):
-        """Initialize X API client."""
-        try:
-            # Try OAuth 1.0a first (more common)
-            consumer_key = os.getenv('X_CLIENT_ID')
-            consumer_secret = os.getenv('X_CLIENT_SECRET')
-            access_token = os.getenv('X_ACCESS_TOKEN')
-            access_token_secret = os.getenv('X_ACCESS_TOKEN_SECRET')
-            
-            if all([consumer_key, consumer_secret, access_token, access_token_secret]):
-                self.auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-                self.auth.set_access_token(access_token, access_token_secret)
-                self.api = tweepy.API(self.auth)
-                logger.info("X API client initialized with OAuth 1.0a")
-                
-            else:
-                # Try OAuth 2.0 with Bearer token
-                bearer_token = os.getenv('X_BEARER_TOKEN')
-                if bearer_token:
-                    self.client = tweepy.Client(bearer_token=bearer_token)
-                    logger.info("X API client initialized with OAuth 2.0")
-                else:
-                    raise ValueError("No X API credentials provided")
-                    
-        except Exception as e:
-            logger.error(f"Failed to initialize X API client: {e}")
-            raise
-    
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    def post_content(self, caption: str, job_data: Dict[str, Any], image_path: Optional[str] = None) -> Tuple[bool, Optional[str]]:
-        """Post content to X (Twitter) with optional image."""
-        try:
-            # Ensure caption is within character limit
-            max_length = self.posting_config.get('captions', {}).get('x', {}).get('max_length', 280)
-            if len(caption) > max_length:
-                logger.warning(f"X caption exceeds {max_length} characters, truncating")
-                caption = caption[:max_length-3] + "..."
-            
-            # Add random delay to avoid rate limiting
-            self._add_random_delay(2, 5)
-            
-            # Post the tweet with image if provided
-            if image_path and os.path.exists(image_path):
-                try:
-                    if hasattr(self, 'api'):  # OAuth 1.0a
-                        media = self.api.media_upload(image_path)
-                        tweet = self.api.update_status(caption, media_ids=[media.media_id])
-                        tweet_id = str(tweet.id)
-                    elif hasattr(self, 'client'):  # OAuth 2.0
-                        # For OAuth 2.0, we need to upload media first
-                        # Note: This requires additional API permissions
-                        logger.warning("Image posting with OAuth 2.0 requires additional permissions")
-                        response = self.client.create_tweet(text=caption)
-                        tweet_id = str(response.data['id'])
-                    else:
-                        raise RuntimeError("No X API client available")
-                except Exception as e:
-                    logger.warning(f"Failed to post image to X, posting text only: {e}")
-                    # Fallback to text-only post
-                    if hasattr(self, 'api'):  # OAuth 1.0a
-                        tweet = self.api.update_status(caption)
-                        tweet_id = str(tweet.id)
-                    elif hasattr(self, 'client'):  # OAuth 2.0
-                        response = self.client.create_tweet(text=caption)
-                        tweet_id = str(response.data['id'])
-            else:
-                # Text-only post
-                if hasattr(self, 'api'):  # OAuth 1.0a
-                    tweet = self.api.update_status(caption)
-                    tweet_id = str(tweet.id)
-                elif hasattr(self, 'client'):  # OAuth 2.0
-                    response = self.client.create_tweet(text=caption)
-                    tweet_id = str(response.data['id'])
-                else:
-                    raise RuntimeError("No X API client available")
-            
-            logger.success(f"X post created successfully with ID: {tweet_id}")
-            return True, tweet_id
-            
-        except Exception as e:
-            logger.error(f"X posting error: {e}")
-            return False, str(e)
-    
-    def get_tweet_metrics(self, tweet_id: str) -> Dict[str, Any]:
-        """Get engagement metrics for a tweet."""
-        try:
-            if hasattr(self, 'api'):  # OAuth 1.0a
-                tweet = self.api.get_status(tweet_id, tweet_mode='extended')
-                return {
-                    'likes': tweet.favorite_count,
-                    'retweets': tweet.retweet_count,
-                    'replies': 0,  # Not directly available in v1.1
-                    'impressions': 0  # Not available in v1.1
-                }
-            elif hasattr(self, 'client'):  # OAuth 2.0
-                # Note: v2 API requires additional permissions for metrics
-                logger.warning("Tweet metrics not available with current API permissions")
-                return {}
-            else:
-                return {}
-                
-        except Exception as e:
-            logger.error(f"Error getting tweet metrics: {e}")
-            return {}
-
 class SocialPosterManager:
     """Manages all social media posters."""
     
@@ -401,13 +295,6 @@ class SocialPosterManager:
                 logger.info("LinkedIn poster initialized")
             except Exception as e:
                 logger.error(f"Failed to initialize LinkedIn poster: {e}")
-        
-        if 'x' in platforms:
-            try:
-                self.posters['x'] = XPoster(self.config)
-                logger.info("X poster initialized")
-            except Exception as e:
-                logger.error(f"Failed to initialize X poster: {e}")
         
         logger.info(f"Initialized {len(self.posters)} social media posters")
     
