@@ -219,18 +219,21 @@ class JobAutomationOrchestrator:
                                 # Optimize caption
                                 optimized_caption = self.caption_generator.optimize_caption(caption, platform)
                                 
-                                # Store as pending post
-                                pending_post = PostsReady(
-                                    job_id=job_id,
-                                    platform=platform,
-                                    caption=optimized_caption,
-                                    status='pending'
-                                )
-                                db.add(pending_post)
+                                # Store as pending post in MongoDB
+                                posts_collection = db.get_collection('posts_ready')
+                                pending_post = {
+                                    'job_id': job_id,
+                                    'platform': platform,
+                                    'caption': optimized_caption,
+                                    'status': 'pending',
+                                    'created_at': datetime.now(),
+                                    'scheduled_for': None
+                                }
+                                posts_collection.insert_one(pending_post)
                                 
-                                logger.info(f"Generated {platform} caption for job: {job.title}")
+                                logger.info(f"Generated {platform} caption for job: {job.get('title', 'Unknown')}")
                             else:
-                                logger.warning(f"Invalid {platform} caption for job: {job.title}")
+                                logger.warning(f"Invalid {platform} caption for job: {job.get('title', 'Unknown')}")
                     
                 except Exception as e:
                     logger.error(f"Error generating captions for job {job_id}: {e}")

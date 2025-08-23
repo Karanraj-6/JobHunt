@@ -20,14 +20,14 @@ class DatabaseManager:
 
     def _load_config(self) -> dict:
         try:
-            with open(self.config_path, 'r') as file:
-                config = yaml.safe_load(file)
+            # Use config.py which loads from config.yaml and injects env vars
+            from config import config
             return config
-        except FileNotFoundError:
-            logger.error(f"Configuration file {self.config_path} not found")
+        except ImportError as e:
+            logger.error(f"Error importing config.py: {e}")
             raise
-        except yaml.YAMLError as e:
-            logger.error(f"Error parsing configuration file: {e}")
+        except Exception as e:
+            logger.error(f"Error loading configuration: {e}")
             raise
 
     def _setup_database(self):
@@ -39,11 +39,28 @@ class DatabaseManager:
         uri = mongo_cfg.get('uri', os.getenv('MONGODB_URI', 'mongodb://localhost:27017'))
         database_name = mongo_cfg.get('database', os.getenv('MONGODB_DB', 'job_automation'))
         try:
-            self.client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+            # Configure MongoDB client with SSL options for Atlas
+            client_options = {
+                'serverSelectionTimeoutMS': 10000,
+                'connectTimeoutMS': 10000,
+                'socketTimeoutMS': 10000,
+                'retryWrites': True,
+                'w': 'majority'
+            }
+            
+            # Add SSL configuration for Atlas connections
+            if 'mongodb+srv://' in uri or 'ssl=true' in uri:
+                client_options.update({
+                    'tls': True,
+                    'tlsInsecure': True  # This bypasses all SSL certificate validation
+                })
+                logger.warning("Using insecure SSL settings for MongoDB Atlas connection")
+            
+            self.client = MongoClient(uri, **client_options)
             # Trigger server selection
             self.client.admin.command('ping')
             self.db = self.client[database_name]
-            logger.success(f"Connected to MongoDB at {uri}, db={database_name}")
+            logger.success(f"Connected to MongoDB at {uri[:50]}..., db={database_name}")
             # Ensure common indexes
             self._ensure_indexes()
         except Exception as e:

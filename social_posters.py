@@ -283,10 +283,13 @@ class SocialPosterManager:
             self.config = yaml.safe_load(file)
         
         self.posters = {}
-        self._initialize_posters()
+        self._posters_initialized = False  # Don't initialize immediately
     
     def _initialize_posters(self):
         """Initialize all enabled social media posters."""
+        if self._posters_initialized:
+            return
+            
         platforms = self.config.get('posting', {}).get('platforms', [])
         
         if 'linkedin' in platforms:
@@ -296,10 +299,19 @@ class SocialPosterManager:
             except Exception as e:
                 logger.error(f"Failed to initialize LinkedIn poster: {e}")
         
+        self._posters_initialized = True
         logger.info(f"Initialized {len(self.posters)} social media posters")
+    
+    def _ensure_posters_initialized(self):
+        """Ensure posters are initialized before use."""
+        if not self._posters_initialized:
+            self._initialize_posters()
     
     def post_to_all_platforms(self, captions: Dict[str, str], job_data: Dict[str, Any], image_path: Optional[str] = None) -> Dict[str, Tuple[bool, Optional[str]]]:
         """Post to all enabled platforms with optional image."""
+        # Initialize posters only when actually needed for posting
+        self._ensure_posters_initialized()
+        
         results = {}
         
         for platform, poster in self.posters.items():
