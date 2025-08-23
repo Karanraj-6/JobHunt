@@ -93,6 +93,18 @@ def post_command(args):
         logger.error(f"Failed to post content: {e}")
         sys.exit(1)
 
+def generate_captions_command(args):
+    """Manually trigger caption generation for existing clean jobs."""
+    try:
+        logger.info("Starting manual caption generation...")
+        orchestrator = JobAutomationOrchestrator(args.config)
+        orchestrator.run_manual_caption_generation()
+        logger.success("Manual caption generation completed")
+        
+    except Exception as e:
+        logger.error(f"Failed to generate captions: {e}")
+        sys.exit(1)
+
 def list_jobs_command(args):
     """List jobs in the system."""
     try:
@@ -245,6 +257,9 @@ Examples:
         help='Platform to post to (default: all)'
     )
     
+    # Generate captions command
+    generate_captions_parser = subparsers.add_parser('generate-captions', help='Manually generate captions for existing clean jobs')
+    
     # List jobs command
     list_jobs_parser = subparsers.add_parser('list-jobs', help='List jobs')
     list_jobs_parser.add_argument('--company', help='Filter by company name')
@@ -285,6 +300,8 @@ Examples:
             fetch_command(args)
         elif args.command == 'post':
             post_command(args)
+        elif args.command == 'generate-captions':
+            generate_captions_command(args)
         elif args.command == 'list-jobs':
             list_jobs_command(args)
         elif args.command == 'list-posts':

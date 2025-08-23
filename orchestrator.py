@@ -186,11 +186,15 @@ class JobAutomationOrchestrator:
             
             for job_id in job_ids:
                 try:
+                    logger.info(f"Processing job_id: {job_id}")
                     # Get job data
                     jobs_collection = db.get_collection('jobs_clean')
-                    job = jobs_collection.find_one({'_id': job_id})
+                    from bson import ObjectId
+                    job = jobs_collection.find_one({'_id': ObjectId(job_id)})
                     if not job:
+                        logger.warning(f"Job not found for job_id: {job_id}")
                         continue
+                    logger.info(f"Found job: {job.get('title', 'Unknown')} at {job.get('company', 'Unknown')}")
                     
                     # Convert to dict for caption generation
                     job_data = {
@@ -205,14 +209,17 @@ class JobAutomationOrchestrator:
                         'employment_type': job.get('employment_type')
                     }
                     
-                    # Generate captions
-                    captions = self.caption_generator.generate_captions(job_data)
+                    # Generate captions - pass as a list since caption generator expects List[Dict]
+                    captions = self.caption_generator.generate_captions([job_data])
+                    logger.info(f"Generated captions for job {job.get('title', 'Unknown')}: {list(captions.keys())}")
                     
                     # Store captions as pending posts
                     platforms = self.config.get('posting', {}).get('platforms', [])
+                    logger.info(f"Available platforms: {platforms}")
                     for platform in platforms:
                         if platform in captions:
                             caption = captions[platform]
+                            logger.info(f"Caption for {platform}: {caption[:100]}...")
                             
                             # Validate caption
                             if self.caption_generator.validate_caption(caption, platform):
@@ -234,6 +241,8 @@ class JobAutomationOrchestrator:
                                 logger.info(f"Generated {platform} caption for job: {job.get('title', 'Unknown')}")
                             else:
                                 logger.warning(f"Invalid {platform} caption for job: {job.get('title', 'Unknown')}")
+                        else:
+                            logger.warning(f"Platform {platform} not found in generated captions")
                     
                 except Exception as e:
                     logger.error(f"Error generating captions for job {job_id}: {e}")
@@ -260,6 +269,7 @@ class JobAutomationOrchestrator:
                 filter_query['platform'] = platform
             
             pending_posts = list(posts_collection.find(filter_query))
+            logger.info(f"Found {len(pending_posts)} pending posts for platform: {platform or 'all'}")
             
             if not pending_posts:
                 logger.info("No pending posts to publish")
@@ -268,19 +278,26 @@ class JobAutomationOrchestrator:
             # Check daily posting limits
             max_posts = self.config.get('posting', {}).get('max_posts_per_day', {}).get(platform or 'linkedin', 4)
             today_posts = self._get_today_post_count(db, platform)
+            logger.info(f"Daily posting limit check: {today_posts}/{max_posts} posts today for {platform or 'all platforms'}")
             
             if today_posts >= max_posts:
                 logger.info(f"Daily posting limit reached for {platform or 'all platforms'}: {today_posts}/{max_posts}")
                 return
             
             # Process pending posts
-            for post in pending_posts[:max_posts - today_posts]:
+            posts_to_process = pending_posts[:max_posts - today_posts]
+            logger.info(f"Processing {len(posts_to_process)} posts (limit: {max_posts - today_posts})")
+            for i, post in enumerate(posts_to_process):
                 try:
+                    logger.info(f"Processing post {i+1}/{len(posts_to_process)}: {post.get('_id', 'Unknown')}")
                     # Get job data
                     jobs_collection = db.get_collection('jobs_clean')
-                    job = jobs_collection.find_one({'_id': post['job_id']})
+                    from bson import ObjectId
+                    job = jobs_collection.find_one({'_id': ObjectId(post['job_id'])})
                     if not job:
+                        logger.warning(f"Job not found for post {post.get('_id', 'Unknown')}")
                         continue
+                    logger.info(f"Found job: {job.get('title', 'Unknown')} at {job.get('company', 'Unknown')}")
                     
                     job_data = {
                         'title': job.get('title'),
@@ -294,39 +311,44 @@ class JobAutomationOrchestrator:
                         'employment_type': job.get('employment_type')
                     }
                     
-                    # Generate image for the job if enabled
-                    image_path = None
-                    if self.config.get('image_generation', {}).get('enabled', False):
-                        try:
-                            image_path = self.image_generation_manager.generator.generate_job_image(job_data)
-                            if image_path:
-                                logger.info(f"Generated image for job: {image_path}")
-                            else:
-                                logger.warning("Failed to generate image for job")
-                        except Exception as e:
-                            logger.error(f"Error generating image: {e}")
+                    # Use the applybutton.gif file as the image
+                    image_path = "applybutton.gif"
+                    if os.path.exists(image_path):
+                        logger.info(f"Using applybutton.gif for job: {job_data.get('title', 'Unknown')}")
+                    else:
+                        logger.warning(f"applybutton.gif not found, posting without image")
+                        image_path = None
                     
                     # Post to social media with image
-                    captions = {post.platform: post.caption}
+                    captions = {post['platform']: post['caption']}
                     results = self.social_poster_manager.post_to_all_platforms(captions, job_data, image_path)
                     
                     # Update post status
-                    if results.get(post.platform, (False, None))[0]:
-                        post.status = 'posted'
+                    if results.get(post['platform'], (False, None))[0]:
+                        # Update post status to posted
+                        posts_collection.update_one(
+                            {'_id': post['_id']}, 
+                            {'$set': {'status': 'posted'}}
+                        )
                         
                         # Create posted item record
-                        posted_item = PostedItems(
-                            job_id=post.job_id,
-                            platform=post.platform,
-                            posted_at=datetime.utcnow(),
-                            external_post_id=results[post.platform][1]
-                        )
-                        db.add(posted_item)
+                        posted_items_collection = db.get_collection('posted_items')
+                        posted_item = {
+                            'job_id': post['job_id'],
+                            'platform': post['platform'],
+                            'posted_at': datetime.utcnow(),
+                            'external_post_id': results[post['platform']][1]
+                        }
+                        posted_items_collection.insert_one(posted_item)
                         
-                        logger.info(f"Successfully posted to {post.platform}: {job.title}")
+                        logger.info(f"Successfully posted to {post['platform']}: {job.get('title', 'Unknown')}")
                     else:
-                        post.status = 'failed'
-                        logger.error(f"Failed to post to {post.platform}: {job.title}")
+                        # Update post status to failed
+                        posts_collection.update_one(
+                            {'_id': post['_id']}, 
+                            {'$set': {'status': 'failed'}}
+                        )
+                        logger.error(f"Failed to post to {post['platform']}: {job.get('title', 'Unknown')}")
                     
                     # Add delay between posts
                     time.sleep(random.uniform(30, 90))
@@ -336,7 +358,6 @@ class JobAutomationOrchestrator:
                     post.status = 'failed'
                     continue
             
-            db.commit()
             logger.info(f"Content posting cycle completed")
             
         except Exception as e:
@@ -346,11 +367,11 @@ class JobAutomationOrchestrator:
     
     def _get_today_post_count(self, db, platform: Optional[str] = None) -> int:
         """Get the number of posts made today."""
-        today = datetime.utcnow().date()
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         
         posted_items_collection = db.get_collection('posted_items')
         filter_query = {
-            'posted_at': {'$gte': today}
+            'posted_at': {'$gte': today_start}
         }
         
         if platform:
@@ -421,6 +442,42 @@ class JobAutomationOrchestrator:
         """Manually trigger content posting."""
         logger.info(f"Manual posting triggered for platform: {platform or 'all'}")
         self.post_pending_content(platform)
+    
+    def run_manual_caption_generation(self):
+        """Manually trigger caption generation for existing clean jobs."""
+        try:
+            logger.info("Manual caption generation triggered")
+            db = get_db()
+            
+            # Get all clean jobs that don't have pending posts
+            jobs_collection = db.get_collection('jobs_clean')
+            posts_collection = db.get_collection('posts_ready')
+            
+            # Get job IDs that already have pending posts
+            existing_post_job_ids = set()
+            existing_posts = posts_collection.find({'status': 'pending'})
+            for post in existing_posts:
+                existing_post_job_ids.add(post['job_id'])
+            
+            # Get clean jobs that don't have pending posts
+            clean_jobs = jobs_collection.find({})
+            job_ids_to_process = []
+            
+            for job in clean_jobs:
+                job_id = str(job['_id'])
+                if job_id not in existing_post_job_ids:
+                    job_ids_to_process.append(job_id)
+            
+            if job_ids_to_process:
+                logger.info(f"Generating captions for {len(job_ids_to_process)} existing clean jobs")
+                self._generate_captions_for_jobs(job_ids_to_process)
+            else:
+                logger.info("All clean jobs already have pending posts")
+                
+        except Exception as e:
+            logger.error(f"Error in manual caption generation: {e}")
+        finally:
+            db.close()
     
     def get_system_status(self) -> Dict[str, Any]:
         """Get current system status."""

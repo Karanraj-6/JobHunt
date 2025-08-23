@@ -129,19 +129,59 @@ class LinkedInPoster(BaseSocialPoster):
     def _navigate_to_post_creation(self) -> bool:
         """Navigate to LinkedIn post creation area."""
         try:
-            # Navigate to LinkedIn home
+            # Navigate to LinkedIn feed (as shown in the screenshot)
             self.driver.get("https://www.linkedin.com/feed/")
-            self._add_random_delay(2, 4)
+            self._add_random_delay(3, 5)
             
-            # Find and click the "Start a post" button
-            start_post_button = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Start a post']"))
-            )
-            start_post_button.click()
-            self._add_random_delay(1, 2)
+            # Strategy 1: Look for the "Start a post" input field (main target from screenshot)
+            start_post_selectors = [
+                "div[data-placeholder='Start a post']",
+                "div[aria-label='Start a post']",
+                "div[data-control-name='share.open']",
+                "div[data-control-name='create_post']",
+                "div[role='textbox'][data-placeholder*='post']",
+                "div[contenteditable='true'][data-placeholder*='post']"
+            ]
             
-            logger.info("Navigated to LinkedIn post creation")
-            return True
+            for selector in start_post_selectors:
+                try:
+                    start_post_element = self.wait.until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                    )
+                    logger.info(f"Found 'Start a post' element with selector: {selector}")
+                    start_post_element.click()
+                    self._add_random_delay(2, 3)
+                    return True
+                except:
+                    continue
+            
+            # Strategy 2: Look for any element with "Start a post" text
+            try:
+                start_post_element = self.driver.find_element(By.XPATH, "//div[contains(text(), 'Start a post') or contains(@data-placeholder, 'Start a post')]")
+                logger.info("Found 'Start a post' element using XPath text search")
+                start_post_element.click()
+                self._add_random_delay(2, 3)
+                return True
+            except:
+                pass
+            
+            # Strategy 3: Look for any clickable element containing "post"
+            try:
+                elements = self.driver.find_elements(By.XPATH, "//*[contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'start a post') or contains(translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'create a post')]")
+                for element in elements:
+                    try:
+                        if element.is_displayed() and element.is_enabled():
+                            logger.info(f"Found potential post element: {element.text[:50]}")
+                            element.click()
+                            self._add_random_delay(2, 3)
+                            return True
+                    except:
+                        continue
+            except Exception as e:
+                logger.warning(f"Text search failed: {e}")
+            
+            logger.error("Could not find LinkedIn 'Start a post' element")
+            return False
             
         except Exception as e:
             logger.error(f"Failed to navigate to post creation: {e}")
@@ -150,10 +190,38 @@ class LinkedInPoster(BaseSocialPoster):
     def _create_post(self, caption: str, job_data: Dict[str, Any], image_path: Optional[str] = None) -> Tuple[bool, Optional[str]]:
         """Create the LinkedIn post with optional image."""
         try:
-            # Wait for post text area to appear
-            post_textarea = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "div[aria-label='Text editor for creating content']"))
-            )
+            # Wait for the modal to appear and find the text area (as shown in screenshot)
+            post_textarea_selectors = [
+                "div[data-placeholder='What do you want to talk about?']",
+                "div[aria-label='Text editor for creating content']",
+                "div[contenteditable='true'][data-placeholder*='talk about']",
+                "div[contenteditable='true'][data-placeholder*='want to']",
+                "div[role='textbox'][data-placeholder*='talk']",
+                "div[contenteditable='true']",
+                "div[role='textbox']"
+            ]
+            
+            post_textarea = None
+            for selector in post_textarea_selectors:
+                try:
+                    post_textarea = self.wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                    )
+                    logger.info(f"Found post textarea with selector: {selector}")
+                    break
+                except:
+                    continue
+            
+            # If not found with CSS selectors, try XPath
+            if not post_textarea:
+                try:
+                    post_textarea = self.driver.find_element(By.XPATH, "//div[contains(@data-placeholder, 'What do you want to talk about') or contains(@data-placeholder, 'talk about')]")
+                    logger.info("Found post textarea using XPath")
+                except:
+                    pass
+            
+            if not post_textarea:
+                raise Exception("Could not find LinkedIn post text area")
             
             # Clear any existing text and enter caption
             post_textarea.clear()
@@ -176,11 +244,47 @@ class LinkedInPoster(BaseSocialPoster):
                     logger.warning(f"Failed to add image to LinkedIn post: {e}")
                     # Continue with text-only post
             
-            # Click Post button
-            post_button = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Post']"))
-            )
-            post_button.click()
+            # Click Post button - try multiple selectors
+            post_button_selectors = [
+                "button[aria-label='Post']",
+                "button[data-control-name='share.post']",
+                "button:contains('Post')",
+                "button[type='submit']",
+                "button[data-control-name='share.post_button']"
+            ]
+            
+            post_button = None
+            for selector in post_button_selectors:
+                try:
+                    post_button = self.wait.until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                    )
+                    logger.info(f"Found post button with selector: {selector}")
+                    break
+                except:
+                    continue
+            
+            if not post_button:
+                # Try to find by text content
+                try:
+                    post_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Post')]")
+                except:
+                    pass
+            
+            if post_button:
+                # Wait for button to become enabled (LinkedIn might enable it after content is added)
+                try:
+                    self.wait.until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "button.share-actions_primary-action"))
+                    )
+                    logger.info("Post button is now clickable")
+                except TimeoutException:
+                    logger.warning("Post button may still be disabled, but attempting to click anyway")
+                
+                # Use JavaScript click to avoid any disabled state issues
+                self.driver.execute_script("arguments[0].click();", post_button)
+            else:
+                raise Exception("Could not find LinkedIn post button")
             
             # Wait for post to complete
             self._add_random_delay(3, 5)
@@ -208,11 +312,40 @@ class LinkedInPoster(BaseSocialPoster):
     def _add_image_to_post(self, image_path: str):
         """Add an image to the LinkedIn post."""
         try:
-            # Look for the image upload button
-            image_button = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Add media']"))
-            )
-            image_button.click()
+            # Look for the "Photo" button (as shown in the screenshot)
+            photo_button_selectors = [
+                "button[aria-label='Photo']",
+                "button[aria-label='Add a photo']",
+                "button[data-control-name='share.add_photo']",
+                "button[data-control-name='share.add_media']",
+                "button:contains('Photo')",
+                "button:contains('Add a photo')",
+                "div[data-control-name='share.add_photo']"
+            ]
+            
+            photo_button = None
+            for selector in photo_button_selectors:
+                try:
+                    photo_button = self.wait.until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                    )
+                    logger.info(f"Found Photo button with selector: {selector}")
+                    break
+                except:
+                    continue
+            
+            # If not found, try XPath search for "Photo" text
+            if not photo_button:
+                try:
+                    photo_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Photo') or contains(text(), 'photo')]")
+                    logger.info("Found Photo button using XPath text search")
+                except:
+                    pass
+            
+            if not photo_button:
+                raise Exception("Could not find LinkedIn Photo button")
+            
+            photo_button.click()
             self._add_random_delay(1, 2)
             
             # Find the file input element
