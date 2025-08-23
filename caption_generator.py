@@ -54,7 +54,7 @@ class CaptionGenerator:
         else:
             raise ValueError("GOOGLE_API_KEY environment variable is required")
     
-    def generate_captions(self, job_data: Dict[str, Any]) -> Dict[str, str]:
+    def generate_captions(self, jobs_data: List[Dict[str, Any]]) -> Dict[str, str]:
         """Generate captions for all platforms."""
         captions = {}
         
@@ -62,62 +62,78 @@ class CaptionGenerator:
         
         for platform in platforms:
             try:
-                caption = self._generate_platform_caption(job_data, platform)
+                caption = self._generate_platform_caption(jobs_data, platform)
                 if caption:
                     captions[platform] = caption
-                    logger.info(f"Generated {platform} caption for job: {job_data.get('title', 'Unknown')}")
+                    logger.info(f"Generated {platform} caption for {len(jobs_data)} jobs.")
             except Exception as e:
                 logger.error(f"Error generating {platform} caption: {e}")
                 continue
         
         return captions
     
-    def _generate_platform_caption(self, job_data: Dict[str, Any], platform: str) -> Optional[str]:
+    def _generate_platform_caption(self, jobs_data: List[Dict[str, Any]], platform: str) -> Optional[str]:
         """Generate caption for a specific platform."""
         platform_config = self.caption_configs.get(platform, {})
         
         if platform == 'linkedin':
-            return self._generate_linkedin_caption(job_data, platform_config)
+            return self._generate_linkedin_caption(jobs_data, platform_config)
         else:
             logger.warning(f"Unsupported platform: {platform}, defaulting to LinkedIn")
-            return self._generate_linkedin_caption(job_data, platform_config)
+            return self._generate_linkedin_caption(jobs_data, platform_config)
     
-    def _generate_linkedin_caption(self, job_data: Dict[str, Any], config: Dict[str, Any]) -> Optional[str]:
+    def _generate_linkedin_caption(self, jobs_data: List[Dict[str, Any]], config: Dict[str, Any]) -> Optional[str]:
         """Generate LinkedIn caption."""
-        prompt = self._build_linkedin_prompt(job_data, config)
+        prompt = self._build_linkedin_prompt(jobs_data, config)
         
         try:
             return self._generate_with_gemini(prompt, config)
         except Exception as e:
             logger.error(f"Error generating LinkedIn caption with Gemini: {e}")
-            return self._generate_fallback_caption(job_data, 'linkedin', config)
+            # For fallback, we'll just use the first job.
+            return self._generate_fallback_caption(jobs_data[0], 'linkedin', config)
     
-    def _build_linkedin_prompt(self, job_data: Dict[str, Any], config: Dict[str, Any]) -> str:
-        """Build LinkedIn prompt."""
-        max_length = config.get('max_length', 1300)
-        hashtag_count = config.get('hashtag_count', 4)
-        tone = config.get('tone', 'professional')
+    def _build_linkedin_prompt(self, jobs_data: List[Dict[str, Any]], config: Dict[str, Any]) -> str:
+        """Build LinkedIn prompt for a list of jobs with a strict template."""
+        hashtag_count = config.get('hashtag_count', 15)
         audience = config.get('audience', 'Indian tech professionals')
         
-        prompt = f"""You are a concise social media assistant. Generate a professional LinkedIn post for this job:
+        jobs_str_list = []
+        for i, job_data in enumerate(jobs_data):
+            skills = ", ".join(job_data.get('skills', []))
+            description = job_data.get('description', 'N/A')
+            job_str = f"""
+**Job {i+1}: {job_data.get('title', 'N/A')}**
 
-Title: {job_data.get('title', 'N/A')}
-Company: {job_data.get('company', 'N/A')}
-Location: {job_data.get('location', 'N/A')}
-Skills: {', '.join(job_data.get('skills', []))}
-Remote: {'Yes' if job_data.get('remote', False) else 'No'}
-Link: {job_data.get('apply_url', 'N/A')}
+- **Company:** {job_data.get('company', 'N/A')}
+- **Role:** {job_data.get('title', 'N/A')}
+- **Location:** {job_data.get('location', 'N/A')}
+- **Experience Required:** {job_data.get('experience', 'N/A')}
+- **Employment Type:** {job_data.get('employment_type', 'N/A')}
+- **Salary/CTC:** {job_data.get('salary', 'Negotiable')}
+- **Apply Link:** {job_data.get('apply_url', 'N/A')}
 
-Constraints:
-- Maximum {max_length} characters
-- {hashtag_count} relevant hashtags
-- {tone} tone
-- Target audience: {audience}
-- Include the apply link
-- Make it engaging but not overly promotional
-- Focus on the opportunity and company
+**Job Description:**
+{description}
 
-Format: Write the post content followed by hashtags on new lines."""
+**Requirements:**
+{skills}
+"""
+            jobs_str_list.append(job_str)
+            
+        jobs_section = "\n---\n".join(jobs_str_list) # Separator between jobs
+
+        prompt = f"""You are a content creation assistant. Your only task is to assemble a single text post from the provided job details.
+
+**Instructions:**
+1.  Combine the following job listings into one continuous text post. 
+2.  Use three dashes (---) as a separator between each job listing.
+3.  After all the job listings, add a "Hashtags" section with {hashtag_count} relevant hashtags for {audience}.
+4.  Do not add any introductory text, titles, or summaries. The output must start directly with the first job's details.
+
+**Job Listings to Combine:**
+{jobs_section}
+"""
         
         return prompt
     

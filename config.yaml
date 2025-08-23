@@ -35,13 +35,13 @@ job_filters:
     - "vp"
     - "c-level"
     - "executive"
+    - "senior"
   
   # Preferred seniority (if specified, only these will be included)
   preferred_seniority:
     - "fresher"
     - "junior"
-    - "mid"
-    - "senior"
+    - "graduates"
 
 # Posting Configuration
 posting:
@@ -62,8 +62,8 @@ posting:
   # Caption generation preferences
   captions:
     linkedin:
-      max_length: 1300
-      hashtag_count: 4
+      max_length: 3000
+      hashtag_count: 7
       tone: "professional"
       audience: "Indian tech professionals"
 
@@ -74,24 +74,25 @@ job_sources:
     enabled: true
     indeed:
       enabled: true
-      max_results: 100
-      keywords: ["python developer", "machine learning engineer", "data scientist"]
-    
+      max_results: 10
+      keywords: ["python developer", "machine learning engineer", "data scientist", "software engineer", "data analyst", "frontend", "backend", "full stack","mern stack"]
+
     naukri:
       enabled: true
-      max_results: 100
-      keywords: ["python", "ml", "data science"]
+      max_results: 10
+      keywords: ["python developer", "machine learning engineer", "data scientist", "software engineer", "data analyst", "frontend", "backend", "full stack","mern stack"]
+
     
     linkedin_jobs:
       enabled: true
-      max_results: 100
-      keywords: ["python", "machine learning", "data science"]
+      max_results: 10
+      keywords: ["python developer", "machine learning engineer", "data scientist", "software engineer", "data analyst", "frontend", "backend", "full stack","mern stack"]
   
   # Job aggregators
   aggregators:
     jooble:
       enabled: true
-      max_results: 200
+      max_results: 10
       keywords: ["python", "machine learning", "ml", "data science", "nlp", "natural language processing", "deep learning", "ai", "artificial intelligence", "data engineering", "software engineering", "web development", "full stack", "backend", "frontend"]
 
 # Database Configuration
@@ -113,12 +114,12 @@ logging:
 # LLM Configuration - Gemini
 llm:
   provider: "gemini"
-  model: "gemini-pro"
-  max_tokens: 150
+  model: "gemini-1.5-flash"
+  max_tokens: 3000
   temperature: 0.7
   caption_style: "professional"
   emoji_enabled: true
-  hashtag_count: 3
+  hashtag_count: 7
 
 # Image Generation Configuration
 image_generation:

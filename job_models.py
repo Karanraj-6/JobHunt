@@ -15,7 +15,7 @@ class Job:
     source_job_id: str
     title: str
     company: str
-    location: str
+    location: Optional[str]
     description: Optional[str]
     apply_url: str
     skills: List[str]
@@ -94,7 +94,7 @@ class JobNormalizer:
             created_at = self._extract_created_at(raw_job)
             
             # Validate required fields
-            if not all([source_job_id, title, company, location, apply_url]):
+            if not all([source_job_id, title, company, apply_url]):
                 logger.warning(f"Skipping job with missing required fields: {title}")
                 return None
             
