@@ -125,11 +125,36 @@ class CaptionGenerator:
 
         prompt = f"""You are a content creation assistant. Your only task is to assemble a single text post from the provided job details.
 
-**Instructions:**
-1.  Combine the following job listings into one continuous text post. 
-2.  Use three dashes (---) as a separator between each job listing.
-3.  After all the job listings, add a "Hashtags" section with {hashtag_count} relevant hashtags for {audience}.
-4.  Do not add any introductory text, titles, or summaries. The output must start directly with the first job's details.
+**CRITICAL FORMATTING REQUIREMENTS:**
+1.  Each piece of information MUST be on a separate line
+2.  Use EXACTLY this format with line breaks:
+   
+   Company Name: [Company Name]
+   Role: [Job Title]
+   Experience: [Experience requirements or N/A if not specified]
+   Apply Link: [Insert link here]
+   
+3.  Use three dashes (---) as a separator between each job listing
+4.  After all the job listings, add these EXACT hashtags:
+   #HiringNow #JobAlert #CareerOpportunities #JobSearch #JobOpening #WeAreHiring
+5.  Do not add any introductory text, titles, or summaries
+6.  The output must start directly with the first job's details
+7.  **MOST IMPORTANT: Use actual line breaks between Company Name, Role, Experience, and Apply Link**
+
+**Example of required format:**
+Company Name: Example Corp
+Role: Developer
+Experience: 2+ years
+Apply Link: https://example.com
+
+---
+
+Company Name: Another Corp
+Role: Senior Developer
+Experience: 5+ years
+Apply Link: https://another.com
+
+#HiringNow #JobAlert #CareerOpportunities #JobSearch #JobOpening #WeAreHiring
 
 **Job Listings to Combine:**
 {jobs_section}

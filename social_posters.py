@@ -13,7 +13,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 from tenacity import retry, stop_after_attempt, wait_exponential
 import yaml
@@ -133,8 +133,9 @@ class LinkedInPoster(BaseSocialPoster):
             self.driver.get("https://www.linkedin.com/feed/")
             self._add_random_delay(3, 5)
             
-            # Strategy 1: Look for the "Start a post" input field (main target from screenshot)
+            # Strategy 1: Use the specific button selector from user's guidance
             start_post_selectors = [
+                "button.artdeco-button--muted.artdeco-button--tertiary",
                 "div[data-placeholder='Start a post']",
                 "div[aria-label='Start a post']",
                 "div[data-control-name='share.open']",
@@ -227,11 +228,12 @@ class LinkedInPoster(BaseSocialPoster):
             post_textarea.clear()
             self._add_random_delay(1, 2)
             
-            # Type the caption with human-like delays
-            for char in caption:
-                post_textarea.send_keys(char)
-                if random.random() < 0.1:  # 10% chance of small delay
-                    time.sleep(random.uniform(0.05, 0.15))
+            # Clean caption to remove problematic Unicode characters that ChromeDriver can't handle
+            cleaned_caption = ''.join(char for char in caption if ord(char) < 0x10000)
+            logger.info(f"Cleaned caption length: {len(cleaned_caption)} characters (removed {len(caption) - len(cleaned_caption)} problematic characters)")
+            
+            # Type the cleaned caption quickly (no slow character-by-character typing)
+            post_textarea.send_keys(cleaned_caption)
             
             self._add_random_delay(2, 3)
             
@@ -240,51 +242,84 @@ class LinkedInPoster(BaseSocialPoster):
                 try:
                     self._add_image_to_post(image_path)
                     self._add_random_delay(2, 3)
+                    
+                    # After image upload and Next button click, now look for the Post button
+                    logger.info("Looking for Post button after returning from image upload...")
+                    
+                    # Strategy 1: Use the specific post button selector from user's guidance
+                    try:
+                        post_button = self.wait.until(
+                            EC.element_to_be_clickable(
+                                (By.XPATH, "//div[@class='share-box actions']//button[contains(@class,'share-actions_primary-action')]")
+                            )
+                        )
+                        logger.info("Found Post button using specific XPath selector")
+                    except TimeoutException:
+                        # Strategy 2: Use the working XPath method as fallback
+                        try:
+                            post_button = self.wait.until(
+                                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Post') or contains(@aria-label, 'Post')]"))
+                            )
+                            logger.info("Found Post button using working XPath method")
+                        except TimeoutException:
+                            # Strategy 3: Try CSS selectors as fallback
+                            post_button_selectors = [
+                                "button[aria-label='Post']",
+                                "button[data-control-name='share.post']",
+                                "button:contains('Post')",
+                                "button[type='submit']",
+                                "button[data-control-name='share.post_button']"
+                            ]
+                            
+                            for selector in post_button_selectors:
+                                try:
+                                    post_button = self.wait.until(
+                                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                                    )
+                                    logger.info(f"Found post button with selector: {selector}")
+                                    break
+                                except:
+                                    continue
+                            
+                            # Strategy 4: Final fallback - search all buttons
+                            if not post_button:
+                                try:
+                                    buttons = self.driver.find_elements(By.XPATH, "//button")
+                                    for button in buttons:
+                                        try:
+                                            if button.is_displayed() and button.is_enabled():
+                                                button_text = button.text.lower()
+                                                if 'post' in button_text or 'submit' in button_text or 'share' in button_text:
+                                                    logger.info(f"Found potential post button: {button.text}")
+                                                    post_button = button
+                                                    break
+                                        except:
+                                            continue
+                                except:
+                                    pass
+                    
+                    if post_button:
+                        # Wait for button to become enabled (LinkedIn might enable it after content is added)
+                        try:
+                            self.wait.until(
+                                EC.element_to_be_clickable(
+                                    (By.XPATH, "//div[@class='share-box actions']//button[contains(@class,'share-actions_primary-action')]")
+                                )
+                            )
+                            logger.info("Post button is now clickable")
+                        except TimeoutException:
+                            logger.warning("Post button may still be disabled, but attempting to click anyway")
+                        
+                        # Use JavaScript click to avoid any disabled state issues
+                        logger.info("Clicking Post button to publish the post...")
+                        self.driver.execute_script("arguments[0].click();", post_button)
+                        logger.info("Post button clicked successfully")
+                    else:
+                        raise Exception("Could not find LinkedIn post button")
+                        
                 except Exception as e:
                     logger.warning(f"Failed to add image to LinkedIn post: {e}")
                     # Continue with text-only post
-            
-            # Click Post button - try multiple selectors
-            post_button_selectors = [
-                "button[aria-label='Post']",
-                "button[data-control-name='share.post']",
-                "button:contains('Post')",
-                "button[type='submit']",
-                "button[data-control-name='share.post_button']"
-            ]
-            
-            post_button = None
-            for selector in post_button_selectors:
-                try:
-                    post_button = self.wait.until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
-                    )
-                    logger.info(f"Found post button with selector: {selector}")
-                    break
-                except:
-                    continue
-            
-            if not post_button:
-                # Try to find by text content
-                try:
-                    post_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Post')]")
-                except:
-                    pass
-            
-            if post_button:
-                # Wait for button to become enabled (LinkedIn might enable it after content is added)
-                try:
-                    self.wait.until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "button.share-actions_primary-action"))
-                    )
-                    logger.info("Post button is now clickable")
-                except TimeoutException:
-                    logger.warning("Post button may still be disabled, but attempting to click anyway")
-                
-                # Use JavaScript click to avoid any disabled state issues
-                self.driver.execute_script("arguments[0].click();", post_button)
-            else:
-                raise Exception("Could not find LinkedIn post button")
             
             # Wait for post to complete
             self._add_random_delay(3, 5)
@@ -312,55 +347,154 @@ class LinkedInPoster(BaseSocialPoster):
     def _add_image_to_post(self, image_path: str):
         """Add an image to the LinkedIn post."""
         try:
-            # Look for the "Photo" button (as shown in the screenshot)
-            photo_button_selectors = [
-                "button[aria-label='Photo']",
-                "button[aria-label='Add a photo']",
-                "button[data-control-name='share.add_photo']",
-                "button[data-control-name='share.add_media']",
-                "button:contains('Photo')",
-                "button:contains('Add a photo')",
-                "div[data-control-name='share.add_photo']"
-            ]
+            # Strategy 1: Use the specific "Add media" button selector from user's guidance
+            try:
+                media_button = self.wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "button[aria-label='Add media']"))
+                )
+                logger.info("Found Add media button using specific aria-label")
+                # Use JavaScript click to avoid element interception
+                self.driver.execute_script("arguments[0].click();", media_button)
+                self._add_random_delay(1, 2)
+            except TimeoutException:
+                # Strategy 2: Fallback to generic selectors
+                photo_button_selectors = [
+                    "button[aria-label='Photo']",
+                    "button[aria-label='Add a photo']",
+                    "button[data-control-name='share.add_photo']",
+                    "button[data-control-name='share.add_media']",
+                    "button:contains('Photo')",
+                    "button:contains('Add a photo')",
+                    "div[data-control-name='share.add_photo']"
+                ]
+                
+                photo_button = None
+                for selector in photo_button_selectors:
+                    try:
+                        photo_button = self.wait.until(
+                            EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                        )
+                        logger.info(f"Found Photo button with selector: {selector}")
+                        break
+                    except:
+                        continue
+                
+                # If not found, try XPath search for "Photo" text
+                if not photo_button:
+                    try:
+                        photo_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Photo') or contains(text(), 'photo')]")
+                        logger.info("Found Photo button using XPath text search")
+                    except:
+                        pass
+                
+                if not photo_button:
+                    raise Exception("Could not find LinkedIn Photo button")
+                
+                photo_button.click()
+                self._add_random_delay(1, 2)
             
-            photo_button = None
-            for selector in photo_button_selectors:
+            # Wait for the file upload dialog to appear
+            logger.info("Waiting for file upload dialog to appear...")
+            self._add_random_delay(2, 3)
+            
+            # Strategy 1: Use the specific file input selector from user's guidance
+            try:
+                file_input = self.wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "input#media-editor-file-selector_file-input"))
+                )
+                logger.info("Found file input using specific ID selector")
+            except TimeoutException:
+                # Strategy 2: Fallback to generic file input
                 try:
-                    photo_button = self.wait.until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                    file_input = self.wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='file']"))
                     )
-                    logger.info(f"Found Photo button with selector: {selector}")
-                    break
-                except:
-                    continue
-            
-            # If not found, try XPath search for "Photo" text
-            if not photo_button:
-                try:
-                    photo_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Photo') or contains(text(), 'photo')]")
-                    logger.info("Found Photo button using XPath text search")
-                except:
-                    pass
-            
-            if not photo_button:
-                raise Exception("Could not find LinkedIn Photo button")
-            
-            photo_button.click()
-            self._add_random_delay(1, 2)
-            
-            # Find the file input element
-            file_input = self.driver.find_element(By.CSS_SELECTOR, "input[type='file']")
+                    logger.info("Found file input using generic type selector")
+                except TimeoutException:
+                    raise Exception("Could not find file input element")
             
             # Send the image file path
             file_input.send_keys(os.path.abspath(image_path))
-            self._add_random_delay(2, 4)
+            logger.info(f"Sent image file path: {os.path.abspath(image_path)}")
             
-            # Wait for image to upload and process
-            self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "img[alt*='uploaded']"))
-            )
+            # Wait longer for image to upload and process
+            logger.info("Waiting for image to upload and process...")
+            self._add_random_delay(5, 8)
+            
+            # Wait for the image preview to appear (this indicates successful upload)
+            try:
+                # Look for the image preview in the editor
+                self.wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "img[src*='blob:']"))
+                )
+                logger.info("Image preview found - upload successful")
+            except TimeoutException:
+                # Alternative: look for any image element
+                try:
+                    self.wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "img"))
+                    )
+                    logger.info("Image element found - upload successful")
+                except TimeoutException:
+                    logger.warning("Could not confirm image upload, but proceeding anyway")
             
             logger.info(f"Image added to LinkedIn post: {image_path}")
+            
+            # After image upload, LinkedIn shows a "Next" button that needs to be clicked
+            try:
+                # Wait for the Next button to appear and be clickable
+                logger.info("Looking for Next button after image upload...")
+                
+                # Wait a bit more for the UI to settle after image upload
+                self._add_random_delay(2, 3)
+                
+                # Strategy 1: Use the specific aria-label selector
+                try:
+                    next_button = self.wait.until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "div.share-box-footer.main-actions button[aria-label='Next']"))
+                    )
+                    logger.info("Found Next button using aria-label selector")
+                except TimeoutException:
+                    logger.info("Next button not found with aria-label, trying other strategies...")
+                    # Strategy 2: Look for button with Next text
+                    try:
+                        next_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Next')]")
+                        logger.info("Found Next button using text search")
+                    except NoSuchElementException:
+                        logger.info("Next button not found with text search, trying class selector...")
+                        # Strategy 3: Look for button with specific class (from user's HTML)
+                        try:
+                            next_button = self.driver.find_element(By.CSS_SELECTOR, "button.share-box-footer_primary-btn")
+                            logger.info("Found Next button using share-box-footer_primary-btn class selector")
+                        except NoSuchElementException:
+                            logger.info("Next button not found with class selector, trying footer text search...")
+                            # Strategy 4: Look for button with Next text in share-box-footer
+                            try:
+                                next_button = self.driver.find_element(By.XPATH, "//div[contains(@class, 'share-box-footer')]//button[contains(text(), 'Next')]")
+                                logger.info("Found Next button using share-box-footer text search")
+                            except NoSuchElementException:
+                                # Strategy 5: Look for any button with Next text anywhere
+                                try:
+                                    next_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Next') or contains(@aria-label, 'Next')]")
+                                    logger.info("Found Next button using general search")
+                                except NoSuchElementException:
+                                    raise Exception("Could not find Next button with any selector")
+                
+                # Click the Next button
+                if next_button:
+                    logger.info(f"Next button found: {next_button.get_attribute('outerHTML')[:200]}...")
+                    logger.info("Clicking Next button to proceed to post...")
+                    # Use JavaScript click to avoid any interception issues
+                    self.driver.execute_script("arguments[0].click();", next_button)
+                    self._add_random_delay(3, 5)  # Wait longer for the transition
+                    logger.info("Successfully clicked Next button and waiting for transition")
+                else:
+                    raise Exception("Next button found but not clickable")
+                    
+            except TimeoutException:
+                logger.warning("Next button not found within timeout, proceeding directly to post")
+            except Exception as e:
+                logger.warning(f"Could not click Next button: {e}, proceeding anyway")
             
         except Exception as e:
             logger.error(f"Failed to add image to LinkedIn post: {e}")
