@@ -246,14 +246,14 @@ class LinkedInPoster(BaseSocialPoster):
                     # After image upload and Next button click, now look for the Post button
                     logger.info("Looking for Post button after returning from image upload...")
                     
-                    # Strategy 1: Use the specific post button selector from user's guidance
+                    # Strategy 1: Use the CSS selector as requested
                     try:
                         post_button = self.wait.until(
                             EC.element_to_be_clickable(
-                                (By.XPATH, "//div[@class='share-box actions']//button[contains(@class,'share-actions_primary-action')]")
+                                (By.CSS_SELECTOR, "button.share-actions__primary-action")
                             )
                         )
-                        logger.info("Found Post button using specific XPath selector")
+                        logger.info("Found Post button using CSS selector")
                     except TimeoutException:
                         # Strategy 2: Use the working XPath method as fallback
                         try:
@@ -303,7 +303,7 @@ class LinkedInPoster(BaseSocialPoster):
                         try:
                             self.wait.until(
                                 EC.element_to_be_clickable(
-                                    (By.XPATH, "//div[@class='share-box actions']//button[contains(@class,'share-actions_primary-action')]")
+                                    (By.CSS_SELECTOR, "button.share-actions__primary-action")
                                 )
                             )
                             logger.info("Post button is now clickable")

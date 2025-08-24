@@ -213,6 +213,9 @@ Apply Link: https://another.com
         return '\n'.join(cleaned_lines)
     
     def _generate_fallback_caption(self, job_data: Dict[str, Any], platform: str, config: Dict[str, Any]) -> str:
+        
+        print(job_data)
+        
         """Generate a fallback caption if Gemini fails."""
         title = job_data.get('title', 'Job Opportunity')
         company = job_data.get('company', 'Company')
