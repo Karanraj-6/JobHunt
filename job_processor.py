@@ -76,6 +76,14 @@ class JobProcessor:
         if not self._passes_seniority_filter(job.seniority):
             return False
         
+        # Job title filter (ensure it's entry-level)
+        if not self._passes_job_title_filter(job.title):
+            return False
+        
+        # Experience filter (check description for experience requirements)
+        if not self._passes_experience_filter(job.description, job.seniority):
+            return False
+        
         return True
     
     def _passes_location_filter(self, location: str) -> bool:
@@ -110,22 +118,201 @@ class JobProcessor:
         return False
     
     def _passes_seniority_filter(self, seniority: Optional[str]) -> bool:
-        """Check if seniority passes the filter."""
+        """Check if seniority passes the filter - only allow entry-level positions."""
         excluded_seniority = self.filters.get('excluded_seniority', [])
         preferred_seniority = self.filters.get('preferred_seniority', [])
         
-        # If no seniority specified, pass through
+        # If no seniority specified, be more flexible - allow through for further filtering
         if not seniority:
-            return True
+            return True  # Allow jobs without seniority info to pass through
         
-        # Check excluded seniority
-        if seniority.lower() in [level.lower() for level in excluded_seniority]:
+        seniority_lower = seniority.lower()
+        
+        # Check excluded seniority (reject all senior positions)
+        for excluded in excluded_seniority:
+            if excluded.lower() in seniority_lower:
+                logger.debug(f"Rejected job with excluded seniority: {seniority}")
+                return False
+        
+        # Check preferred seniority (only allow entry-level positions)
+        if preferred_seniority:
+            for preferred in preferred_seniority:
+                if preferred.lower() in seniority_lower:
+                    logger.debug(f"Accepted job with preferred seniority: {seniority}")
+                    return True
+        
+        # Additional checks for experience years (0-2 years only)
+        experience_patterns = [
+            r'(\d+)[\+-]?\s*years?',  # e.g., "2+ years", "1-2 years"
+            r'(\d+)\s*to\s*(\d+)\s*years?',  # e.g., "1 to 2 years"
+            r'less\s*than\s*(\d+)\s*years?',  # e.g., "less than 2 years"
+            r'upto\s*(\d+)\s*years?',  # e.g., "upto 2 years"
+            r'max\s*(\d+)\s*years?',  # e.g., "max 2 years"
+        ]
+        
+        for pattern in experience_patterns:
+            import re
+            match = re.search(pattern, seniority_lower)
+            if match:
+                try:
+                    years = int(match.group(1))
+                    if years <= 2:
+                        logger.debug(f"Accepted job with acceptable experience: {seniority} ({years} years)")
+                        return True
+                    else:
+                        logger.debug(f"Rejected job with too much experience: {seniority} ({years} years)")
+                        return False
+                except (ValueError, IndexError):
+                    continue
+        
+        # If we reach here, the seniority doesn't match our criteria
+        logger.debug(f"Rejected job with unclear seniority: {seniority}")
+        return False
+    
+    def _passes_job_title_filter(self, title: str) -> bool:
+        """Check if job title indicates entry-level position."""
+        if not title:
             return False
         
-        # If preferred seniority is specified, check if job matches
-        if preferred_seniority:
-            return seniority.lower() in [level.lower() for level in preferred_seniority]
+        title_lower = title.lower()
         
+        # Entry-level indicators in job titles
+        entry_level_indicators = [
+            'fresher', 'junior', 'entry level', 'entry-level', 'associate', 'assistant',
+            'trainee', 'intern', 'internship', 'new grad', 'new graduate', 'recent graduate',
+            'student', 'apprentice', 'entry', 'beginner', 'junior developer', 'junior engineer',
+            'junior analyst', 'junior scientist', 'junior consultant'
+        ]
+        
+        # Check if title contains entry-level indicators
+        for indicator in entry_level_indicators:
+            if indicator in title_lower:
+                logger.debug(f"Accepted job with entry-level title: {title}")
+                return True
+        
+        # Check for experience patterns in title (0-2 years)
+        experience_patterns = [
+            r'(\d+)[\+-]?\s*years?',  # e.g., "2+ years", "1-2 years"
+            r'(\d+)\s*to\s*(\d+)\s*years?',  # e.g., "1 to 2 years"
+            r'less\s*than\s*(\d+)\s*years?',  # e.g., "less than 2 years"
+            r'upto\s*(\d+)\s*years?',  # e.g., "upto 2 years"
+            r'max\s*(\d+)\s*years?',  # e.g., "max 2 years"
+        ]
+        
+        for pattern in experience_patterns:
+            import re
+            match = re.search(pattern, title_lower)
+            if match:
+                try:
+                    years = int(match.group(1))
+                    if years <= 2:
+                        logger.debug(f"Accepted job with acceptable experience in title: {title} ({years} years)")
+                        return True
+                    else:
+                        logger.debug(f"Rejected job with too much experience in title: {title} ({years} years)")
+                        return False
+                except (ValueError, IndexError):
+                    continue
+        
+        # If title doesn't clearly indicate entry-level, allow it through (experience filter will handle it)
+        logger.debug(f"Allowing job with unclear entry-level title: {title}")
+        return True
+    
+    def _passes_experience_filter(self, description: Optional[str], seniority: Optional[str]) -> bool:
+        """Check if job description indicates entry-level experience requirements (0-2 years)."""
+        import re
+        
+        # Combine description and seniority for analysis
+        text_to_analyze = ""
+        if description:
+            text_to_analyze += description.lower()
+        if seniority:
+            text_to_analyze += " " + seniority.lower()
+        
+        if not text_to_analyze:
+            return True  # If no text to analyze, allow through
+        
+        # Patterns that indicate entry-level positions (0-2 years)
+        entry_level_patterns = [
+            r'(\d+)[\+-]?\s*years?\s*experience',  # e.g., "2+ years experience"
+            r'(\d+)\s*to\s*(\d+)\s*years?\s*experience',  # e.g., "1 to 2 years experience"
+            r'less\s*than\s*(\d+)\s*years?\s*experience',  # e.g., "less than 2 years experience"
+            r'upto\s*(\d+)\s*years?\s*experience',  # e.g., "upto 2 years experience"
+            r'max\s*(\d+)\s*years?\s*experience',  # e.g., "max 2 years experience"
+            r'(\d+)[\+-]?\s*years?\s*of\s*experience',  # e.g., "2+ years of experience"
+            r'(\d+)\s*to\s*(\d+)\s*years?\s*of\s*experience',  # e.g., "1 to 2 years of experience"
+            r'experience\s*level[:\s]*(\d+)[\+-]?\s*years?',  # e.g., "Experience level: 2+ years"
+            r'required\s*experience[:\s]*(\d+)[\+-]?\s*years?',  # e.g., "Required experience: 2+ years"
+            r'minimum\s*experience[:\s]*(\d+)[\+-]?\s*years?',  # e.g., "Minimum experience: 2+ years"
+        ]
+        
+        # Check for entry-level experience patterns
+        for pattern in entry_level_patterns:
+            match = re.search(pattern, text_to_analyze)
+            if match:
+                try:
+                    years = int(match.group(1))
+                    if years <= 2:
+                        logger.debug(f"Accepted job with acceptable experience requirement: {years} years")
+                        return True
+                    else:
+                        logger.debug(f"Rejected job with too much experience requirement: {years} years")
+                        return False
+                except (ValueError, IndexError):
+                    continue
+        
+        # Patterns that indicate senior positions (reject these)
+        senior_patterns = [
+            r'(\d+)[\+-]?\s*years?\s*experience',  # e.g., "5+ years experience"
+            r'(\d+)\s*to\s*(\d+)\s*years?\s*experience',  # e.g., "3 to 5 years experience"
+            r'minimum\s*(\d+)[\+-]?\s*years?\s*experience',  # e.g., "minimum 3+ years experience"
+            r'at\s*least\s*(\d+)[\+-]?\s*years?\s*experience',  # e.g., "at least 3+ years experience"
+            r'(\d+)[\+-]?\s*years?\s*of\s*experience',  # e.g., "5+ years of experience"
+        ]
+        
+        # Check for senior experience patterns
+        for pattern in senior_patterns:
+            match = re.search(pattern, text_to_analyze)
+            if match:
+                try:
+                    years = int(match.group(1))
+                    if years > 2:
+                        logger.debug(f"Rejected job with senior experience requirement: {years} years")
+                        return False
+                except (ValueError, IndexError):
+                    continue
+        
+        # Keywords that indicate entry-level positions
+        entry_level_keywords = [
+            'fresher', 'junior', 'entry level', 'entry-level', 'associate', 'assistant',
+            'trainee', 'intern', 'internship', 'new grad', 'new graduate', 'recent graduate',
+            'student', 'apprentice', 'entry', 'beginner', 'graduate', 'fresh graduate',
+            'no experience', '0 experience', 'zero experience', 'first job', 'first role',
+            'entry position', 'junior position', 'associate position', 'trainee position'
+        ]
+        
+        # Check for entry-level keywords
+        for keyword in entry_level_keywords:
+            if keyword in text_to_analyze:
+                logger.debug(f"Accepted job with entry-level keyword: {keyword}")
+                return True
+        
+        # Keywords that indicate senior positions (reject these)
+        senior_keywords = [
+            'senior', 'lead', 'principal', 'architect', 'manager', 'head', 'chief',
+            'staff', 'director', 'vp', 'c-level', 'executive', 'team lead', 'tech lead',
+            'engineering manager', 'senior developer', 'senior engineer', 'senior analyst',
+            'senior scientist', 'senior consultant', 'experienced', 'expert', 'specialist'
+        ]
+        
+        # Check for senior keywords
+        for keyword in senior_keywords:
+            if keyword in text_to_analyze:
+                logger.debug(f"Rejected job with senior keyword: {keyword}")
+                return False
+        
+        # If we can't determine experience level, allow it through (better to include than exclude)
+        logger.debug(f"Could not determine experience level, allowing job through")
         return True
     
     def deduplicate_jobs(self, jobs: List[Job]) -> List[Job]:

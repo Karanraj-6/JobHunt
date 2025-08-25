@@ -29,19 +29,50 @@ job_filters:
     - "backend"
     - "frontend"
   
-  # Excluded seniority levels
+  # Excluded seniority levels (exclude all senior positions)
   excluded_seniority:
     - "director"
     - "vp"
     - "c-level"
     - "executive"
     - "senior"
+    - "lead"
+    - "principal"
+    - "architect"
+    - "manager"
+    - "head"
+    - "chief"
+    - "staff"
+    - "senior developer"
+    - "senior engineer"
+    - "senior analyst"
+    - "senior scientist"
+    - "senior consultant"
+    - "team lead"
+    - "tech lead"
+    - "engineering manager"
   
-  # Preferred seniority (if specified, only these will be included)
+  # Preferred seniority (only include entry-level positions)
   preferred_seniority:
     - "fresher"
     - "junior"
     - "graduates"
+    - "entry level"
+    - "entry-level"
+    - "0-1 years"
+    - "0-2 years"
+    - "1-2 years"
+    - "1+ years"
+    - "2+ years"
+    - "new grad"
+    - "new graduate"
+    - "recent graduate"
+    - "student"
+    - "intern"
+    - "internship"
+    - "trainee"
+    - "associate"
+    - "assistant"
 
 # Posting Configuration
 posting:
@@ -74,26 +105,26 @@ job_sources:
     enabled: true
     indeed:
       enabled: true
-      max_results: 10
-      keywords: ["python developer", "machine learning engineer", "data scientist", "software engineer", "data analyst", "frontend", "backend", "full stack","mern stack"]
+      max_results: 50
+      keywords: ["python developer", "machine learning engineer", "data scientist", "software engineer", "data analyst", "frontend developer", "backend developer", "full stack developer", "mern stack developer", "python", "ml engineer", "data engineer", "web developer", "react developer", "node.js developer", "java developer"]
 
     naukri:
       enabled: true
-      max_results: 10
-      keywords: ["python developer", "machine learning engineer", "data scientist", "software engineer", "data analyst", "frontend", "backend", "full stack","mern stack"]
+      max_results: 50
+      keywords: ["python developer", "machine learning engineer", "data scientist", "software engineer", "data analyst", "frontend developer", "backend developer", "full stack developer", "mern stack developer", "python", "ml engineer", "data engineer", "web developer", "react developer", "node.js developer", "java developer"]
 
     
     linkedin_jobs:
       enabled: true
-      max_results: 10
-      keywords: ["python developer", "machine learning engineer", "data scientist", "software engineer", "data analyst", "frontend", "backend", "full stack","mern stack"]
+      max_results: 50
+      keywords: ["python developer", "machine learning engineer", "data scientist", "software engineer", "data analyst", "frontend developer", "backend developer", "full stack developer", "mern stack developer", "python", "ml engineer", "data engineer", "web developer", "react developer", "node.js developer", "java developer"]
   
   # Job aggregators
   aggregators:
     jooble:
       enabled: true
-      max_results: 10
-      keywords: ["python", "machine learning", "ml", "data science", "nlp", "natural language processing", "deep learning", "ai", "artificial intelligence", "data engineering", "software engineering", "web development", "full stack", "backend", "frontend"]
+      max_results: 50
+      keywords: ["python", "machine learning", "ml", "data science", "nlp", "natural language processing", "deep learning", "ai", "artificial intelligence", "data engineering", "software engineering", "web development", "full stack", "backend", "frontend", "react", "node.js", "java", "javascript", "typescript"]
 
 # Database Configuration
 database:

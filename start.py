@@ -17,6 +17,7 @@ def main():
     print("7. python cli.py status")
     print("8. python test_system.py")
     print("9. python test_gemini.py")
+    print("10. python monthly_cleanup.py (Monthly cleanup)")
     print()
     print("To start the system, run: python cli.py init")
     print("Then fetch jobs: python cli.py fetch")

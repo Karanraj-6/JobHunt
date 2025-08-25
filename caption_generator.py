@@ -83,13 +83,11 @@ class CaptionGenerator:
             return self._generate_linkedin_caption(jobs_data, platform_config)
     
     def _generate_linkedin_caption(self, jobs_data: List[Dict[str, Any]], config: Dict[str, Any]) -> Optional[str]:
-        """Generate LinkedIn caption."""
-        prompt = self._build_linkedin_prompt(jobs_data, config)
-        
+        """Generate LinkedIn caption directly from database data."""
         try:
-            return self._generate_with_gemini(prompt, config)
+            return self._generate_direct_caption(jobs_data, config)
         except Exception as e:
-            logger.error(f"Error generating LinkedIn caption with Gemini: {e}")
+            logger.error(f"Error generating LinkedIn caption: {e}")
             # For fallback, we'll just use the first job.
             return self._generate_fallback_caption(jobs_data[0], 'linkedin', config)
     
@@ -212,6 +210,39 @@ Apply Link: https://another.com
         
         return '\n'.join(cleaned_lines)
     
+    def _generate_direct_caption(self, jobs_data: List[Dict[str, Any]], config: Dict[str, Any]) -> str:
+        """Generate LinkedIn caption directly from database data using f-string template."""
+        hashtags = [
+            "#HiringNow", "#JobAlert", "#CareerOpportunities",
+            "#JobSearch", "#JobOpening", "#WeAreHiring", "#TechJobs"
+        ]
+        
+        jobs_sections = []
+        for i, job_data in enumerate(jobs_data):
+            # Format each job with proper line breaks using your exact format
+            job_section = f"""Company : {job_data.get('company', 'N/A')}
+Role : {job_data.get('title', 'N/A')}
+Location : {job_data.get('location', 'N/A')}
+Experience : {job_data.get('seniority', 'N/A')}
+Employment Type : {job_data.get('employment_type', 'N/A')}
+Remote : {job_data.get('remote', 'N/A')}
+Apply Link : {job_data.get('apply_url', 'N/A')}
+Skills : {", ".join(job_data.get('skills', [])) if job_data.get('skills') else "N/A"}
+Description : {job_data.get('description', 'N/A') or "N/A"}"""
+            
+            jobs_sections.append(job_section)
+        
+        # Join all jobs with separators and add hashtags
+        caption = "\n\n---\n\n".join(jobs_sections)
+        caption += f"\n\n{' '.join(hashtags)}"
+        
+        # Debug: print the caption to see what's generated
+        logger.info(f"Generated caption length: {len(caption)}")
+        logger.info(f"Generated caption hashtags: {caption.count('#')}")
+        logger.info(f"Caption preview: {caption[:200]}...")
+        
+        return caption
+    
     def _generate_fallback_caption(self, job_data: Dict[str, Any], platform: str, config: Dict[str, Any]) -> str:
         
         print(job_data)
@@ -252,21 +283,29 @@ Apply: {apply_url}
         platform_config = self.caption_configs.get(platform, {})
         max_length = platform_config.get('max_length', 280)
         
+        logger.info(f"Validating {platform} caption - Length: {len(caption)}, Max: {max_length}")
+        logger.info(f"Caption hashtag count: {caption.count('#')}, Required: {platform_config.get('hashtag_count', 4)}")
+        
         if len(caption) > max_length:
             logger.warning(f"{platform} caption exceeds {max_length} characters: {len(caption)}")
             return False
         
         # Check for required elements
         if platform == 'linkedin':
-            if not caption.count('#') >= platform_config.get('hashtag_count', 4):
-                logger.warning(f"LinkedIn caption missing required hashtags")
+            required_hashtags = platform_config.get('hashtag_count', 4)
+            actual_hashtags = caption.count('#')
+            if not actual_hashtags >= required_hashtags:
+                logger.warning(f"LinkedIn caption missing required hashtags. Found: {actual_hashtags}, Required: {required_hashtags}")
                 return False
         
         elif platform == 'x':
-            if not caption.count('#') >= platform_config.get('hashtag_count', 2):
-                logger.warning(f"X caption missing required hashtags")
+            required_hashtags = platform_config.get('hashtag_count', 2)
+            actual_hashtags = caption.count('#')
+            if not actual_hashtags >= required_hashtags:
+                logger.warning(f"X caption missing required hashtags. Found: {actual_hashtags}, Required: {required_hashtags}")
                 return False
         
+        logger.info(f"{platform} caption validation passed")
         return True
     
     def optimize_caption(self, caption: str, platform: str) -> str:

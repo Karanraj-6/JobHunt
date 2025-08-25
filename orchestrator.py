@@ -113,6 +113,15 @@ class JobAutomationOrchestrator:
                 max_instances=1
             )
             
+            # Monthly cleanup schedule (1st of every month at 2 AM)
+            self.scheduler.add_job(
+                func=self.monthly_cleanup,
+                trigger=CronTrigger(day=1, hour=2, timezone=timezone),
+                id='monthly_cleanup',
+                name='Monthly Database Cleanup',
+                max_instances=1
+            )
+            
             logger.info("Scheduler setup completed")
             
         except Exception as e:
@@ -124,6 +133,10 @@ class JobAutomationOrchestrator:
         try:
             self.scheduler.start()
             logger.success("Job Automation Orchestrator started successfully")
+            
+            # Trigger immediate job fetch and processing
+            logger.info("🚀 Triggering initial job fetch and processing...")
+            self.fetch_and_process_jobs()
             
             # Keep the main thread alive
             try:
@@ -176,8 +189,21 @@ class JobAutomationOrchestrator:
             # Generate captions for new jobs
             self._generate_captions_for_jobs(stored_job_ids)
             
+            # Post immediately after caption generation (for testing)
+            if stored_job_ids:
+                logger.info("🚀 Triggering immediate posting after caption generation...")
+                self.post_pending_content()
+            
         except Exception as e:
             logger.error(f"Error in fetch_and_process_jobs: {e}")
+        finally:
+            # Close database connection after all operations
+            try:
+                db = get_db()
+                db.close()
+                logger.info("Database connection closed after job processing")
+            except:
+                pass
     
     def _generate_captions_for_jobs(self, job_ids: List[str]):
         """Generate captions for newly processed jobs."""
@@ -252,8 +278,6 @@ class JobAutomationOrchestrator:
             
         except Exception as e:
             logger.error(f"Error in caption generation: {e}")
-        finally:
-            db.close()
     
     def post_pending_content(self, platform: Optional[str] = None):
         """Post pending content to social media platforms."""
@@ -430,6 +454,43 @@ class JobAutomationOrchestrator:
             
         except Exception as e:
             logger.error(f"Error in analytics collection: {e}")
+        finally:
+            db.close()
+    
+    def monthly_cleanup(self):
+        """Perform monthly database cleanup."""
+        try:
+            logger.info("🔄 Starting monthly database cleanup...")
+            
+            db = get_db()
+            collections = ['raw_jobs', 'clean_jobs', 'posts_ready', 'posted_items']
+            total_deleted = 0
+            
+            for collection_name in collections:
+                try:
+                    collection = db.get_collection(collection_name)
+                    count_before = collection.count_documents({})
+                    result = collection.delete_many({})
+                    total_deleted += result.deleted_count
+                    logger.info(f"Cleared {collection_name}: {count_before} documents deleted")
+                except Exception as e:
+                    logger.error(f"Error clearing {collection_name}: {e}")
+                    continue
+            
+            # Log cleanup activity
+            cleanup_collection = db.get_collection('cleanup_logs')
+            cleanup_log = {
+                'timestamp': datetime.utcnow(),
+                'action': 'monthly_cleanup',
+                'documents_deleted': total_deleted,
+                'collections_cleared': collections
+            }
+            cleanup_collection.insert_one(cleanup_log)
+            
+            logger.success(f"✅ Monthly cleanup completed! Total documents deleted: {total_deleted}")
+            
+        except Exception as e:
+            logger.error(f"❌ Error in monthly cleanup: {e}")
         finally:
             db.close()
     
